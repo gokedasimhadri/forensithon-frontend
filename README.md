@@ -1,6 +1,6 @@
-# FORENSITHON 2026 — Vite + React
+# FORENSITHON 2k26 — Vite + React
 
-Official web application for **FORENSITHON 2026** (Forensic Innovation Hackathon), organised by the **Department of Forensic Science, School of Sciences in collaboration with Institution's Innovation Council (IIC), Aditya University**.
+Official web application for **FORENSITHON 2k26** (Forensic Innovation Hackathon), organised by the **Department of Forensic Science, School of Sciences in collaboration with Institution's Innovation Council (IIC), Aditya University**.
 
 ## Tech Stack
 

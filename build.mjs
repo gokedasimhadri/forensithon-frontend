@@ -1,48 +1,48 @@
 import fs from 'node:fs';
 await import('./build-base.mjs');
-const logoData=fs.readFileSync('university-logo.b64','utf8').trim();
-const logoFile='dist/aditya-university-logo.jpg';
-fs.writeFileSync(logoFile,Buffer.from(logoData,'base64'));
-for(const f of ['index.html','challenges.html','rounds.html','registration.html']){
-  const p='dist/'+f;
-  let h=fs.readFileSync(p,'utf8');
-  const headerPattern=/<header>(<img class="emblem"[^>]*>)(<a class="brand"[^>]*>.*?<\/a>)(<nav aria-label="Main navigation">.*?<\/nav>)(<button class="motion-toggle"[^>]*>.*?<\/button>)?<\/header>/;
-  const match=h.match(headerPattern);
-  if(!match)throw new Error('Expected header markup missing in '+f);
-  const logo=match[1].replace(/src="[^"]+"/,'src="aditya-university-logo.jpg"').replace(/alt="[^"]+"/,'alt="Aditya University logo"');
-  const header=`<header class="site-header">${logo}<div class="header-identity"><a class="brand" href="index.html">FORENSITHON 2026</a><p class="header-organised">Organised by</p><p class="header-subtitle">Department of Forensic Science, School of Sciences in collaboration with Institution's Innovation Council (IIC)</p></div>${match[3]}${match[4]||''}</header>`;
-  h=h.replace(match[0],header);
-  const footerOld='<footer><strong>FORENSITHON 2026</strong>';
-  if(!h.includes(footerOld))throw new Error('Expected footer markup missing in '+f);
-  h=h.replace(footerOld,'<footer><img class="footer-logo" src="aditya-university-logo.jpg" alt="Aditya University logo"><strong>FORENSITHON 2026</strong>');
-  const oldFooterSchool=' / Aditya University</p>';
-  if(!h.includes(oldFooterSchool))throw new Error('Expected footer university suffix missing in '+f);
-  h=h.replace(oldFooterSchool,'</p>');
-  if(f==='index.html'){
-    const old='<p class="eyebrow">ADITYA UNIVERSITY / FORENSIC INNOVATION HACKATHON</p>';
-    if(!h.includes(old))throw new Error('Expected home hero eyebrow missing');
-    h=h.replace(old,'<p class="eyebrow hero-kicker">FORENSIC INNOVATION HACKATHON</p>');
-    const badgeOld='<p class="hero-event">9-10 December 2026 · T-Hub · 6 students per team</p>';
-    if(!h.includes(badgeOld))throw new Error('Expected home hero date badge missing');
-    h=h.replace(badgeOld,'<p class="hero-event">9-10 December 2026 · 6 students per team</p>');
-    const venueStat='<div><span>VENUE</span><strong>T-Hub</strong></div>';
-    if(!h.includes(venueStat))throw new Error('Expected location stat missing');
-    h=h.replace(venueStat,'');
+const logoData = fs.readFileSync('university-logo.b64', 'utf8').trim();
+const logoFile = 'dist/aditya-university-logo.jpg';
+fs.writeFileSync(logoFile, Buffer.from(logoData, 'base64'));
+for (const f of ['index.html', 'challenges.html', 'rounds.html', 'registration.html']) {
+  const p = 'dist/' + f;
+  let h = fs.readFileSync(p, 'utf8');
+  const headerPattern = /<header>(<img class="emblem"[^>]*>)(<a class="brand"[^>]*>.*?<\/a>)(<nav aria-label="Main navigation">.*?<\/nav>)(<button class="motion-toggle"[^>]*>.*?<\/button>)?<\/header>/;
+  const match = h.match(headerPattern);
+  if (!match) throw new Error('Expected header markup missing in ' + f);
+  const logo = match[1].replace(/src="[^"]+"/, 'src="aditya-university-logo.jpg"').replace(/alt="[^"]+"/, 'alt="Aditya University logo"');
+  const header = `<header class="site-header">${logo}<div class="header-identity"><a class="brand" href="index.html">FORENSITHON 2k26</a><p class="header-organised">Organised by</p><p class="header-subtitle">Department of Forensic Science, School of Sciences in collaboration with Institution's Innovation Council (IIC)</p></div>${match[3]}${match[4] || ''}</header>`;
+  h = h.replace(match[0], header);
+  const footerOld = '<footer><strong>FORENSITHON 2k26</strong>';
+  if (!h.includes(footerOld)) throw new Error('Expected footer markup missing in ' + f);
+  h = h.replace(footerOld, '<footer><img class="footer-logo" src="aditya-university-logo.jpg" alt="Aditya University logo"><strong>FORENSITHON 2k26</strong>');
+  const oldFooterSchool = ' / Aditya University</p>';
+  if (!h.includes(oldFooterSchool)) throw new Error('Expected footer university suffix missing in ' + f);
+  h = h.replace(oldFooterSchool, '</p>');
+  if (f === 'index.html') {
+    const old = '<p class="eyebrow">ADITYA UNIVERSITY / FORENSIC INNOVATION HACKATHON</p>';
+    if (!h.includes(old)) throw new Error('Expected home hero eyebrow missing');
+    h = h.replace(old, '<p class="eyebrow hero-kicker">FORENSIC INNOVATION HACKATHON</p>');
+    const badgeOld = '<p class="hero-event">9-10 December 2k26 · T-Hub · 6 students per team</p>';
+    if (!h.includes(badgeOld)) throw new Error('Expected home hero date badge missing');
+    h = h.replace(badgeOld, '<p class="hero-event">9-10 December 2k26 · 6 students per team</p>');
+    const venueStat = '<div><span>VENUE</span><strong>T-Hub</strong></div>';
+    if (!h.includes(venueStat)) throw new Error('Expected location stat missing');
+    h = h.replace(venueStat, '');
   }
-  if(f==='registration.html'){
-    const locationLine='<p class="lead">9-10 December 2026 / T-Hub</p>';
-    if(!h.includes(locationLine))throw new Error('Expected registration location line missing');
-    h=h.replace(locationLine,'<p class="lead">9-10 December 2026</p>');
+  if (f === 'registration.html') {
+    const locationLine = '<p class="lead">9-10 December 2k26 / T-Hub</p>';
+    if (!h.includes(locationLine)) throw new Error('Expected registration location line missing');
+    h = h.replace(locationLine, '<p class="lead">9-10 December 2k26</p>');
   }
-  if(f==='rounds.html'){
-    const locationText='to the two-day offline event at T-Hub, 9-10 December 2026.';
-    if(!h.includes(locationText))throw new Error('Expected rounds location sentence missing');
-    h=h.replace(locationText,'to the two-day offline event on 9-10 December 2026.');
+  if (f === 'rounds.html') {
+    const locationText = 'to the two-day offline event at T-Hub, 9-10 December 2k26.';
+    if (!h.includes(locationText)) throw new Error('Expected rounds location sentence missing');
+    h = h.replace(locationText, 'to the two-day offline event on 9-10 December 2k26.');
   }
-  if(/t-hub|thub|venue/i.test(h))throw new Error('A removed location reference remains in '+f);
-  fs.writeFileSync(p,h);
+  if (/t-hub|thub|venue/i.test(h)) throw new Error('A removed location reference remains in ' + f);
+  fs.writeFileSync(p, h);
 }
-fs.appendFileSync('dist/styles.css',String.raw`
+fs.appendFileSync('dist/styles.css', String.raw`
 /* Centered event identity and cleaner mobile header. */
 header.site-header{position:relative;min-height:82px;display:flex;align-items:center;gap:12px}
 header.site-header .emblem{position:relative;z-index:2;flex:0 0 auto;width:170px;height:auto;max-height:58px;object-fit:contain;border-radius:0}

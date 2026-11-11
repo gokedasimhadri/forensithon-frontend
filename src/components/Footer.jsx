@@ -8,7 +8,7 @@ export default function Footer() {
         src={`${import.meta.env.BASE_URL}aditya-university-logo.jpg`}
         alt="Aditya University logo"
       />
-      <strong>FORENSITHON 2026</strong>
+      <strong>FORENSITHON 2k26</strong>
       <p>School of Sciences × Institution's Innovation Council (IIC)</p>
       <div className="footer-links">
         <Link to="/challenges">Challenge catalogue</Link>

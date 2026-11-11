@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { eventData } from '../data/eventData';
 
@@ -34,6 +34,191 @@ const OPEN_BRANCH_OPTIONS = [
 
 const YEAR_OPTIONS = ['1st Year', '2nd Year', '3rd Year', '4th Year', 'Postgraduate (PG)'];
 
+// Registration Amount configured from environment (.env)
+const REGISTRATION_AMOUNT = Number(
+  import.meta.env.VITE_REGISTRATION_FEE_AMOUNT ||
+  import.meta.env.VITE_REGISTRATION_AMOUNT ||
+  300
+);
+
+// ECAP Student Data API Key
+const ECAP_API_KEY = '4T4K65HWxqKD90AEZoCZLqA+m3nq6JvwDRDHIJUBFc4=';
+
+/**
+ * Fetch Student Details from ECAP API (with multiple proxy and backend fallbacks)
+ */
+const fetchStudentDetailsFromApi = async (rollNo) => {
+  if (!rollNo || !rollNo.trim()) return null;
+  const cleanRoll = rollNo.trim().toUpperCase();
+  const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:9022';
+
+  // Strategy 1: Unified Backend endpoint (CORS-free, keeps secret on server)
+  try {
+    const res = await fetch(`${backendUrl}/api/forensithon/student/${encodeURIComponent(cleanRoll)}`);
+    if (res.ok) {
+      const json = await res.json();
+      if (json.success && json.data) {
+        return json.data;
+      }
+    }
+  } catch (e1) {
+    // continue to next strategy
+  }
+
+  // Strategy 2: Vite Dev Proxy (/adityaapi/api/studentdata/...)
+  try {
+    const proxyUrl = `/adityaapi/api/studentdata/${encodeURIComponent(cleanRoll)}`;
+    const res = await fetch(proxyUrl, {
+      headers: {
+        'Accept': 'application/json',
+        'x-api-key': ECAP_API_KEY,
+        'X-API-Key': ECAP_API_KEY
+      }
+    });
+    if (res.ok) {
+      const json = await res.json();
+      const list = Array.isArray(json) ? json : (json ? [json] : []);
+      if (list.length > 0 && !list[0].error && (list[0].studentname || list[0].studentName || list[0].name)) {
+        return list[0];
+      }
+    }
+  } catch (e2) {
+    // continue to next strategy
+  }
+
+  // Strategy 3: Direct ECAP endpoint with API Key
+  try {
+    const directUrl = `https://info.aec.edu.in/adityaapi/api/studentdata/${encodeURIComponent(cleanRoll)}`;
+    const res = await fetch(directUrl, {
+      headers: {
+        'Accept': 'application/json',
+        'x-api-key': ECAP_API_KEY,
+        'X-API-Key': ECAP_API_KEY
+      }
+    });
+    if (res.ok) {
+      const json = await res.json();
+      const list = Array.isArray(json) ? json : (json ? [json] : []);
+      if (list.length > 0 && !list[0].error && (list[0].studentname || list[0].studentName || list[0].name)) {
+        return list[0];
+      }
+    }
+  } catch (e3) {
+    // ignore
+  }
+
+  return null;
+};
+
+/**
+ * Smart mapping from ECAP semester to Forensithon Year of Study
+ */
+const mapSemesterToYear = (semesterName, joinedBatch, courseName) => {
+  const sem = (semesterName || '').toLowerCase();
+  const course = (courseName || '').toLowerCase();
+
+  if (course.includes('m.sc') || course.includes('mba') || course.includes('m.tech') || course.includes('m.pharm') || course.includes('pg')) {
+    return 'Postgraduate (PG)';
+  }
+  if (sem.includes('vii') || sem.includes('viii') || sem.includes('4/4') || sem.includes('4th') || sem.includes('sem4')) {
+    return '4th Year';
+  }
+  if (sem.includes('v semester') || sem.includes('vi semester') || sem.includes('3/4') || sem.includes('3rd') || sem.includes('sem3')) {
+    return '3rd Year';
+  }
+  if (sem.includes('iii semester') || sem.includes('iv semester') || sem.includes('2/4') || sem.includes('2nd') || sem.includes('sem2')) {
+    return '2nd Year';
+  }
+  if (sem.includes('i semester') || sem.includes('ii semester') || sem.includes('1/4') || sem.includes('1st') || sem.includes('sem1')) {
+    return '1st Year';
+  }
+  if (joinedBatch) {
+    const curYear = new Date().getFullYear();
+    const diff = curYear - Number(joinedBatch) + 1;
+    if (diff === 1) return '1st Year';
+    if (diff === 2) return '2nd Year';
+    if (diff === 3) return '3rd Year';
+    if (diff >= 4) return '4th Year';
+  }
+  return '3rd Year';
+};
+
+/**
+ * Smart mapping from ECAP branch to tier dropdown options
+ */
+const mapStudentBranch = (tier, rawBranch, rawCourse) => {
+  const b = (rawBranch || '').toLowerCase();
+  const c = (rawCourse || '').toLowerCase();
+
+  if (tier === 'forensic') {
+    if (c.includes('m.sc') || b.includes('m.sc')) {
+      return 'M.Sc Forensic Science';
+    }
+    if (b.includes('csdf') || b.includes('cyber') || b.includes('digital forensic')) {
+      return 'B.Tech CSDF (Computer Science & Digital Forensics)';
+    }
+    if (b.includes('forensic')) {
+      return 'B.Sc Forensic Science';
+    }
+    return 'B.Sc Forensic Science';
+  }
+
+  if (tier === 'engineering') {
+    if (b.includes('ai') || b.includes('aiml') || b.includes('machine learning')) {
+      return 'Artificial Intelligence & Machine Learning (AIML)';
+    }
+    if (b.includes('data science') || b.includes('ds')) {
+      return 'Data Science';
+    }
+    if (b.includes('it') || b.includes('information tech')) {
+      return 'Information Technology (IT)';
+    }
+    if (b.includes('ece') || b.includes('electronics')) {
+      return 'Electronics & Communication Engineering (ECE)';
+    }
+    if (b.includes('eee') || b.includes('electrical')) {
+      return 'Electrical & Electronics Engineering (EEE)';
+    }
+    if (b.includes('mech')) {
+      return 'Mechanical Engineering';
+    }
+    if (b.includes('civil')) {
+      return 'Civil Engineering';
+    }
+    if (b.includes('petro') || b.includes('chem')) {
+      return 'Petroleum / Chemical Engineering';
+    }
+    if (b.includes('cse') || b.includes('computer')) {
+      return 'Computer Science & Engineering (CSE)';
+    }
+    return 'Computer Science & Engineering (CSE)';
+  }
+
+  if (tier === 'open') {
+    if (c.includes('management') || c.includes('bba') || c.includes('mba') || b.includes('mba') || b.includes('bba')) {
+      return 'School of Management Studies (BBA / MBA)';
+    }
+    if (c.includes('pharm') || b.includes('pharm')) {
+      return 'School of Pharmacy (B.Pharm / M.Pharm)';
+    }
+    if (b.includes('bio') || b.includes('micro') || b.includes('chem') || c.includes('science')) {
+      return 'School of Sciences (Biotechnology / Microbiology / Chemistry)';
+    }
+    if (b.includes('humanities') || b.includes('arts') || b.includes('english')) {
+      return 'Humanities, Social Sciences & Languages';
+    }
+    if (b.includes('forensic') || b.includes('csdf')) {
+      return 'Forensic Science / CSDF';
+    }
+    if (c.includes('b.tech') || b.includes('cse') || b.includes('ece') || b.includes('it') || b.includes('mech') || b.includes('civil')) {
+      return 'Engineering & Technology (Any Branch)';
+    }
+    return 'School of Management Studies (BBA / MBA)';
+  }
+
+  return rawBranch;
+};
+
 const createInitialMembers = () => [
   // Tier 1: 2 Forensic Science / CSDF students
   {
@@ -42,8 +227,8 @@ const createInitialMembers = () => [
     tierTitle: 'Tier 1 · Forensic Science',
     role: 'Team Leader & Primary Contact',
     isLead: true,
-    name: '',
     rollNo: '',
+    name: '',
     email: '',
     branch: 'B.Sc Forensic Science',
     year: '3rd Year',
@@ -55,8 +240,8 @@ const createInitialMembers = () => [
     tierTitle: 'Tier 1 · Forensic Science',
     role: 'Forensic Investigator',
     isLead: false,
-    name: '',
     rollNo: '',
+    name: '',
     email: '',
     branch: 'B.Sc Forensic Science',
     year: '3rd Year',
@@ -69,8 +254,8 @@ const createInitialMembers = () => [
     tierTitle: 'Tier 2 · Engineering & Allied',
     role: 'Technical Lead & Builder',
     isLead: false,
-    name: '',
     rollNo: '',
+    name: '',
     email: '',
     branch: 'Computer Science & Engineering (CSE)',
     year: '3rd Year',
@@ -82,8 +267,8 @@ const createInitialMembers = () => [
     tierTitle: 'Tier 2 · Engineering & Allied',
     role: 'Technical Specialist',
     isLead: false,
-    name: '',
     rollNo: '',
+    name: '',
     email: '',
     branch: 'Information Technology (IT)',
     year: '3rd Year',
@@ -96,8 +281,8 @@ const createInitialMembers = () => [
     tierTitle: 'Tier 3 · Open Discipline',
     role: 'Research & UX Lead',
     isLead: false,
-    name: '',
     rollNo: '',
+    name: '',
     email: '',
     branch: 'School of Management Studies (BBA / MBA)',
     year: '3rd Year',
@@ -109,14 +294,29 @@ const createInitialMembers = () => [
     tierTitle: 'Tier 3 · Open Discipline',
     role: 'Interdisciplinary Builder',
     isLead: false,
-    name: '',
     rollNo: '',
+    name: '',
     email: '',
     branch: 'School of Sciences (Biotechnology / Microbiology / Chemistry)',
     year: '3rd Year',
     phone: ''
   }
 ];
+
+// Helper to ensure Razorpay checkout script is loaded
+const loadRazorpayScript = () => {
+  return new Promise((resolve) => {
+    if (window.Razorpay) {
+      resolve(true);
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+};
 
 export default function RegistrationPage() {
   const [searchParams] = useSearchParams();
@@ -126,11 +326,95 @@ export default function RegistrationPage() {
   const [selectedChallengeId, setSelectedChallengeId] = useState('DF-01');
   const [teamName, setTeamName] = useState('');
   const [members, setMembers] = useState(createInitialMembers);
-  const [utrNumber, setUtrNumber] = useState('');
-  const [paymentFileName, setPaymentFileName] = useState('');
   const [agreed, setAgreed] = useState(false);
   const [validationErrors, setValidationErrors] = useState({});
   const [submittedData, setSubmittedData] = useState(null);
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const [paymentErrorMessage, setPaymentErrorMessage] = useState('');
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+
+  // Lookup statuses per member index (0 to 5)
+  const [lookupStatuses, setLookupStatuses] = useState(() =>
+    Array(6).fill({ status: 'idle', studentName: '', message: '' })
+  );
+  const lookupTimeouts = useRef({});
+
+  // Real-time student lookup from ECAP API by Roll Number
+  const triggerStudentLookup = async (index, rollToLookup) => {
+    const cleanRoll = (rollToLookup || '').trim().toUpperCase();
+    if (!cleanRoll || cleanRoll.length < 5) return;
+
+    setLookupStatuses((prev) => {
+      const copy = [...prev];
+      copy[index] = { status: 'loading', studentName: '', message: 'Auto-fetching...' };
+      return copy;
+    });
+
+    try {
+      const student = await fetchStudentDetailsFromApi(cleanRoll);
+
+      if (student && !student.error && (student.studentname || student.studentName || student.name)) {
+        const studentName = student.studentname || student.studentName || student.name || '';
+        const phone = student.mobilenumber || student.MobileNumber || student.phone || '';
+        const rawEmail = student.emailid || student.email || '';
+        const cleanEmail =
+          rawEmail && (rawEmail.toLowerCase().includes('aditya.ac.in') || rawEmail.toLowerCase().includes('adityauniversity.in'))
+            ? rawEmail.toLowerCase()
+            : `${cleanRoll.toLowerCase()}@aditya.ac.in`;
+
+        const tier = members[index]?.tier || 'forensic';
+        const mappedYear = mapSemesterToYear(student.semestername, student.joinedbatch, student.coursename);
+        const mappedBranch = mapStudentBranch(tier, student.branch, student.coursename);
+
+        setMembers((prev) => {
+          const copy = [...prev];
+          copy[index] = {
+            ...copy[index],
+            name: studentName || copy[index].name,
+            email: cleanEmail,
+            branch: mappedBranch || copy[index].branch,
+            year: mappedYear || copy[index].year,
+            phone: phone || copy[index].phone
+          };
+          return copy;
+        });
+
+        setLookupStatuses((prev) => {
+          const copy = [...prev];
+          copy[index] = {
+            status: 'found',
+            studentName,
+            branch: student.branch || '',
+            course: student.coursename || ''
+          };
+          return copy;
+        });
+
+        // Clear errors for this student
+        setValidationErrors((prev) => {
+          const next = { ...prev };
+          delete next[`member_${index}_rollNo`];
+          delete next[`member_${index}_name`];
+          delete next[`member_${index}_email`];
+          if (phone) delete next[`member_${index}_phone`];
+          return next;
+        });
+      } else {
+        setLookupStatuses((prev) => {
+          const copy = [...prev];
+          copy[index] = { status: 'not_found', studentName: '', message: 'Manual entry available' };
+          return copy;
+        });
+      }
+    } catch (err) {
+      console.warn('Student lookup failed:', err);
+      setLookupStatuses((prev) => {
+        const copy = [...prev];
+        copy[index] = { status: 'not_found', studentName: '', message: 'Lookup error' };
+        return copy;
+      });
+    }
+  };
 
   // If a challenge query parameter is provided in URL, pre-select that challenge and its domain
   useEffect(() => {
@@ -176,24 +460,52 @@ export default function RegistrationPage() {
   const handleMemberChange = (index, field, value) => {
     setMembers((prev) => {
       const copy = [...prev];
-      copy[index] = { ...copy[index], [field]: value };
+      const prevMember = copy[index];
+      const updatedMember = { ...prevMember, [field]: value };
+
+      // Auto-populate Email when Roll Number is entered
+      if (field === 'rollNo') {
+        const cleanRoll = value.trim();
+        const currentEmail = prevMember.email.trim();
+        const prevAutoEmail = prevMember.rollNo ? `${prevMember.rollNo.trim()}@aditya.ac.in`.toLowerCase() : '';
+        if (cleanRoll && (!currentEmail || currentEmail.toLowerCase() === prevAutoEmail)) {
+          updatedMember.email = `${cleanRoll.toLowerCase()}@aditya.ac.in`;
+        }
+      }
+
+      copy[index] = updatedMember;
       return copy;
     });
+
+    // Auto-trigger API lookup when Roll Number is typed
+    if (field === 'rollNo') {
+      const cleanRoll = value.trim().toUpperCase();
+      if (lookupTimeouts.current[index]) {
+        clearTimeout(lookupTimeouts.current[index]);
+      }
+      if (cleanRoll.length >= 8) {
+        lookupTimeouts.current[index] = setTimeout(() => {
+          triggerStudentLookup(index, cleanRoll);
+        }, 400);
+      } else if (cleanRoll.length === 0) {
+        setLookupStatuses((prev) => {
+          const copy = [...prev];
+          copy[index] = { status: 'idle', studentName: '', message: '' };
+          return copy;
+        });
+      }
+    }
 
     // Clear field-specific validation error
     if (validationErrors[`member_${index}_${field}`]) {
       setValidationErrors((prev) => {
         const next = { ...prev };
         delete next[`member_${index}_${field}`];
+        if (field === 'rollNo' && next[`member_${index}_email`]) {
+          delete next[`member_${index}_email`];
+        }
         return next;
       });
-    }
-  };
-
-  const handleFileUpload = (e) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setPaymentFileName(file.name);
     }
   };
 
@@ -208,16 +520,16 @@ export default function RegistrationPage() {
       errors.challenge = 'Please select a problem statement.';
     }
 
-    // Validate 6 members
+    // Validate 6 members (checking Roll Number first as primary identifier)
     members.forEach((m, idx) => {
-      if (!m.name.trim()) {
-        errors[`member_${idx}_name`] = `Student ${idx + 1} name is required.`;
-      }
       if (!m.rollNo.trim()) {
         errors[`member_${idx}_rollNo`] = `Roll number is required.`;
       }
+      if (!m.name.trim()) {
+        errors[`member_${idx}_name`] = `Student ${idx + 1} name is required.`;
+      }
       if (!m.email.trim()) {
-        errors[`member_${idx}_email`] = `Aditya email is required.`;
+        errors[`member_${idx}_email`] = `Email is required.`;
       } else if (!m.email.includes('@')) {
         errors[`member_${idx}_email`] = `Please enter a valid email address.`;
       }
@@ -227,12 +539,6 @@ export default function RegistrationPage() {
       }
     });
 
-    if (!utrNumber.trim()) {
-      errors.utrNumber = 'Transaction UTR / Reference number is required.';
-    } else if (utrNumber.trim().length < 8) {
-      errors.utrNumber = 'Please enter a valid UTR number (at least 8 characters).';
-    }
-
     if (!agreed) {
       errors.agreed = 'You must confirm that all 6 members satisfy the university & branch rules.';
     }
@@ -241,7 +547,7 @@ export default function RegistrationPage() {
     return Object.keys(errors).length === 0;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
     if (!validateForm()) {
@@ -253,53 +559,209 @@ export default function RegistrationPage() {
       return;
     }
 
-    // Generate unique Registration ID
-    const randomCode = Math.floor(1000 + Math.random() * 9000);
-    const regId = `FST-2026-${randomCode}`;
-    const timestamp = new Date().toLocaleString('en-IN', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    setIsProcessingPayment(true);
+    setPaymentErrorMessage('');
 
-    const record = {
-      regId,
-      timestamp,
-      teamName: teamName.trim(),
-      domain: currentDomainInfo?.title || `Domain ${selectedDomain}`,
-      challengeId: currentChallenge.id,
-      challengeTitle: currentChallenge.title,
-      forensicRole: currentChallenge.forensic,
-      technicalRole: currentChallenge.technical,
-      members,
-      utrNumber: utrNumber.trim(),
-      paymentFileName: paymentFileName || 'receipt_attached.jpg',
-      status: 'CONFIRMED · PENDING FINAL JURY SCREENING'
-    };
-
-    setSubmittedData(record);
     try {
-      localStorage.setItem('forensithon_last_reg', JSON.stringify(record));
-    } catch {
-      // Ignore localStorage quotas
-    }
+      // 1. Ensure Razorpay Checkout SDK is ready
+      const scriptReady = await loadRazorpayScript();
+      if (!scriptReady || !window.Razorpay) {
+        throw new Error('Razorpay SDK failed to load. Please check your internet connection.');
+      }
 
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:9022';
+
+      // 2. Call Backend API to Create Order and register in event_forensithon_registrations
+      const orderPayload = {
+        amount: REGISTRATION_AMOUNT,
+        teamName: teamName.trim(),
+        domainId: Number(selectedDomain),
+        domainTitle: currentDomainInfo?.title || `Domain 0${selectedDomain}`,
+        challengeId: currentChallenge.id,
+        challengeTitle: currentChallenge.title,
+        forensicScope: currentChallenge.forensic,
+        technicalScope: currentChallenge.technical,
+        members: members.map((m, idx) => ({
+          studentIndex: idx + 1,
+          tier: m.tier,
+          tierTitle: m.tierTitle,
+          role: m.role,
+          isLead: m.isLead,
+          name: m.name.trim(),
+          rollNo: m.rollNo.trim().toUpperCase(),
+          email: m.email.trim(),
+          branch: m.branch,
+          year: m.year,
+          phone: m.phone ? m.phone.trim() : ''
+        }))
+      };
+
+      const res = await fetch(`${backendUrl}/api/forensithon/create-order`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(orderPayload)
+      });
+
+      const orderData = await res.json();
+
+      if (!res.ok || !orderData.success) {
+        throw new Error(orderData.error || orderData.details || 'Failed to initiate registration order.');
+      }
+
+      // 3. Configure and Open Razorpay Checkout Window
+      const rzpOptions = {
+        key: orderData.key || orderData.keyId,
+        amount: orderData.amount, // in paise: 30000 = ₹300
+        currency: orderData.currency || 'INR',
+        name: 'FORENSITHON 2k26',
+        description: `Team Registration (${teamName.trim()}) - ${currentChallenge.id}`,
+        image: `${import.meta.env.BASE_URL}aditya-university-logo.jpg`,
+        order_id: orderData.orderId,
+        prefill: {
+          name: members[0].name.trim(),
+          email: members[0].email.trim(),
+          contact: members[0].phone ? members[0].phone.trim() : ''
+        },
+        theme: {
+          color: '#ff5500' // Forensithon Orange
+        },
+        handler: async function (paymentResponse) {
+          try {
+            // 4. Verify Payment with Backend API & Save to event_forensithon_payments
+            const verifyRes = await fetch(`${backendUrl}/api/forensithon/verify-payment`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                razorpay_order_id: paymentResponse.razorpay_order_id,
+                razorpay_payment_id: paymentResponse.razorpay_payment_id,
+                razorpay_signature: paymentResponse.razorpay_signature,
+                registrationId: orderData.registrationId,
+                regDocId: orderData.regDocId
+              })
+            });
+
+            const verifyData = await verifyRes.json();
+            if (!verifyRes.ok || !verifyData.success) {
+              throw new Error(verifyData.error || 'Server payment verification failed.');
+            }
+
+            const timestamp = new Date().toLocaleString('en-IN', {
+              day: 'numeric',
+              month: 'short',
+              year: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit'
+            });
+
+            const confirmedRecord = {
+              regId: orderData.registrationId,
+              timestamp,
+              teamName: teamName.trim(),
+              domain: currentDomainInfo?.title || `Domain ${selectedDomain}`,
+              challengeId: currentChallenge.id,
+              challengeTitle: currentChallenge.title,
+              forensicRole: currentChallenge.forensic,
+              technicalRole: currentChallenge.technical,
+              members,
+              razorpayOrderId: paymentResponse.razorpay_order_id,
+              razorpayPaymentId: paymentResponse.razorpay_payment_id,
+              amount: orderData.amountInRupees || REGISTRATION_AMOUNT,
+              status: 'PAID & CONFIRMED · VERIFIED VIA RAZORPAY'
+            };
+
+            setSubmittedData(confirmedRecord);
+            setIsProcessingPayment(false);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          } catch (verifyError) {
+            console.error('Verification error:', verifyError);
+            setPaymentErrorMessage(
+              `Payment was processed by Razorpay (ID: ${paymentResponse.razorpay_payment_id}), but verification returned: ${verifyError.message}`
+            );
+            setIsProcessingPayment(false);
+          }
+        },
+        modal: {
+          ondismiss: function () {
+            setIsProcessingPayment(false);
+          }
+        }
+      };
+
+      const razorpayInstance = new window.Razorpay(rzpOptions);
+      razorpayInstance.on('payment.failed', function (failedResponse) {
+        console.error('Payment failed:', failedResponse);
+        setPaymentErrorMessage(
+          failedResponse.error?.description || 'Payment was unsuccessful or cancelled by the user.'
+        );
+        setIsProcessingPayment(false);
+      });
+
+      razorpayInstance.open();
+    } catch (err) {
+      console.error('Registration/Payment Error:', err);
+      setPaymentErrorMessage(err.message || 'An error occurred while connecting to the payment gateway.');
+      setIsProcessingPayment(false);
+    }
   };
 
   const handleReset = () => {
     setSubmittedData(null);
     setTeamName('');
-    setUtrNumber('');
-    setPaymentFileName('');
     setAgreed(false);
     setValidationErrors({});
+    setIsProcessingPayment(false);
+    setPaymentErrorMessage('');
     setMembers(createInitialMembers());
   };
 
-  // If already submitted, display the official Confirmation Slip
+  const handleDownloadPdf = async () => {
+    setIsGeneratingPdf(true);
+    try {
+      const receiptElement = document.getElementById('receipt-download-card');
+      if (!receiptElement) {
+        window.print();
+        setIsGeneratingPdf(false);
+        return;
+      }
+
+      let h2p = window.html2pdf;
+      if (!h2p) {
+        try {
+          const mod = await import('html2pdf.js');
+          h2p = mod.default || mod;
+        } catch (e) {
+          // fallback
+        }
+      }
+
+      if (h2p) {
+        const fileName = `Forensithon_Receipt_${submittedData?.regId || 'Slip'}.pdf`;
+        const opt = {
+          margin: [8, 8, 8, 8],
+          filename: fileName,
+          image: { type: 'jpeg', quality: 0.98 },
+          html2canvas: {
+            scale: 2,
+            useCORS: true,
+            logging: false,
+            scrollY: 0
+          },
+          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        };
+
+        await h2p().set(opt).from(receiptElement).save();
+      } else {
+        window.print();
+      }
+    } catch (err) {
+      console.warn('PDF generation fallback to print:', err);
+      window.print();
+    } finally {
+      setIsGeneratingPdf(false);
+    }
+  };
+
+  // If already submitted and verified, display the official Confirmation Slip
   if (submittedData) {
     return (
       <main id="main-content">
@@ -312,27 +774,43 @@ export default function RegistrationPage() {
                 </svg>
               </span>
               <div>
-                <span className="success-kicker">TEAM ENTRY CONFIRMED</span>
-                <h1 className="success-title">Registration Slip</h1>
+                <span className="success-kicker">TEAM ENTRY CONFIRMED · RAZORPAY PAID</span>
+                <h1 className="success-title">Official Registration Slip</h1>
                 <p className="success-subtitle">
-                  Your team has been successfully registered for Forensithon 2026.
+                  Your team has been successfully registered and payment verified for Forensithon 2k26.
                 </p>
               </div>
             </div>
 
-            <div className="receipt-card">
+            <div id="receipt-download-card" className="receipt-card">
+              {/* Official Aditya University Header for PDF & Print */}
+              <div className="receipt-brand-header">
+                <div className="receipt-brand-logos">
+                  <img
+                    src={`${import.meta.env.BASE_URL}aditya-university-logo.jpg`}
+                    alt="Aditya University"
+                    className="receipt-univ-logo"
+                  />
+                </div>
+                <div className="receipt-brand-text">
+                  <h3 className="receipt-brand-title">ADITYA UNIVERSITY</h3>
+                  <p className="receipt-brand-dept">Department of Forensic Science · School of Sciences</p>
+                  <p className="receipt-brand-event">FORENSITHON 2k26 · OFFICIAL REGISTRATION RECEIPT</p>
+                </div>
+              </div>
+
               <div className="receipt-meta-row">
                 <div>
                   <span className="receipt-meta-label">REGISTRATION ID</span>
                   <span className="receipt-id-badge">{submittedData.regId}</span>
                 </div>
                 <div>
-                  <span className="receipt-meta-label">SUBMITTED AT</span>
-                  <strong>{submittedData.timestamp}</strong>
+                  <span className="receipt-meta-label">PAYMENT ID</span>
+                  <span className="receipt-payment-id-badge">{submittedData.razorpayPaymentId}</span>
                 </div>
                 <div>
-                  <span className="receipt-meta-label">ENTRY STATUS</span>
-                  <span className="status-badge status-badge--active">PROTOTYPE SCREENING</span>
+                  <span className="receipt-meta-label">STATUS</span>
+                  <span className="status-badge status-badge--active">PAID &amp; CONFIRMED</span>
                 </div>
               </div>
 
@@ -347,7 +825,7 @@ export default function RegistrationPage() {
                   </div>
                   <div>
                     <span className="receipt-field-title">Team Leader</span>
-                    <strong>{submittedData.members[0].name}</strong> ({submittedData.members[0].phone})
+                    <strong>{submittedData.members[0].rollNo} — {submittedData.members[0].name}</strong> ({submittedData.members[0].phone})
                   </div>
                 </div>
 
@@ -365,7 +843,7 @@ export default function RegistrationPage() {
               <div className="receipt-section">
                 <span className="receipt-subheading">REGISTERED SQUAD (6 BUILDERS)</span>
                 <p className="receipt-branch-confirmation">
-                  ✓ Verified: Exactly 6 Aditya University students (2 Forensic + 2 Engineering + 2 Open Discipline)
+                  ✓ Verified &amp; Stored in Database: Exactly 6 Aditya University students (2 Forensic + 2 Engineering + 2 Open Discipline)
                 </p>
 
                 <div className="receipt-members-grid">
@@ -375,9 +853,9 @@ export default function RegistrationPage() {
                         <span className="receipt-member-role">{m.role}</span>
                         <span className="receipt-member-tier-pill">{m.tierTitle}</span>
                       </div>
+                      <span className="receipt-member-roll-badge">{m.rollNo}</span>
                       <h4 className="receipt-member-name">{m.name}</h4>
                       <p className="receipt-member-details">
-                        <span><strong>Roll:</strong> {m.rollNo}</span>
                         <span><strong>Branch:</strong> {m.branch} ({m.year})</span>
                         <span><strong>Email:</strong> {m.email}</span>
                       </p>
@@ -390,9 +868,11 @@ export default function RegistrationPage() {
 
               <div className="receipt-section receipt-payment-section">
                 <div>
-                  <span className="receipt-subheading">PAYMENT VERIFICATION</span>
-                  <p><strong>Registration Fee:</strong> ₹300 per team</p>
-                  <p><strong>Transaction UTR / Ref:</strong> <code>{submittedData.utrNumber}</code></p>
+                  <span className="receipt-subheading">PAYMENT VERIFICATION (RAZORPAY)</span>
+                  <p><strong>Registration Fee:</strong> ₹{submittedData.amount || REGISTRATION_AMOUNT} (Covering all 6 builders)</p>
+                  <p><strong>Razorpay Payment ID:</strong> <code>{submittedData.razorpayPaymentId}</code></p>
+                  <p><strong>Razorpay Order ID:</strong> <code>{submittedData.razorpayOrderId}</code></p>
+                  <p><strong>Collections Updated:</strong> <code>event_forensithon_registrations</code> &amp; <code>event_forensithon_payments</code></p>
                 </div>
                 <div className="receipt-stamp-box">
                   <span className="aditya-stamp">ADITYA UNIVERSITY</span>
@@ -405,10 +885,31 @@ export default function RegistrationPage() {
             <div className="receipt-actions-row">
               <button
                 type="button"
-                className="button"
+                className="button download-pdf-btn"
+                onClick={handleDownloadPdf}
+                disabled={isGeneratingPdf}
+              >
+                {isGeneratingPdf ? (
+                  <span className="btn-loading-flex">
+                    <span className="spinner" /> Generating PDF...
+                  </span>
+                ) : (
+                  <>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '6px' }}>
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                      <polyline points="7 10 12 15 17 10" />
+                      <line x1="12" y1="15" x2="12" y2="3" />
+                    </svg>
+                    Download Receipt (PDF) ↓
+                  </>
+                )}
+              </button>
+              <button
+                type="button"
+                className="button secondary"
                 onClick={() => window.print()}
               >
-                Print / Save Slip ⎙
+                Print Slip ⎙
               </button>
               <button
                 type="button"
@@ -430,31 +931,99 @@ export default function RegistrationPage() {
   return (
     <main id="main-content">
       <section className="section registration-page">
-        <p className="eyebrow">OFFICIAL TEAM REGISTRATION · FORENSITHON 2026</p>
+        <p className="eyebrow">OFFICIAL TEAM REGISTRATION · FORENSITHON 2k26</p>
         <h1 className="page-title">Register as six.</h1>
-        <p className="lead">9-10 December 2026 · Aditya University Campus</p>
+        <p className="lead">9-10 December 2k26 · Aditya University Campus</p>
 
-        {/* Mandatory Requirement Rule Banner */}
+        {/* 3 Key Event Cards at the Top */}
+        <div className="registration-facts-grid">
+          <div className="fact-card fact-card--deadline">
+            <div className="fact-card-header">
+              <span className="fact-icon-wrap" aria-hidden="true">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                  <line x1="16" y1="2" x2="16" y2="6" />
+                  <line x1="8" y1="2" x2="8" y2="6" />
+                  <line x1="3" y1="10" x2="21" y2="10" />
+                </svg>
+              </span>
+              <span className="fact-pill fact-pill--orange">DEADLINE</span>
+            </div>
+            <span className="fact-label">Registration Deadline</span>
+            <strong className="fact-value">5 December 2k26</strong>
+            <span className="fact-sub">Portal closes at 11:59 PM IST</span>
+          </div>
+
+          <div className="fact-card fact-card--fee">
+            <div className="fact-card-header">
+              <span className="fact-icon-wrap" aria-hidden="true">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8" />
+                  <line x1="12" y1="6" x2="12" y2="8" />
+                  <line x1="12" y1="16" x2="12" y2="18" />
+                </svg>
+              </span>
+              <span className="fact-pill fact-pill--blue">ENTRY FEE</span>
+            </div>
+            <span className="fact-label">Registration Fee</span>
+            <strong className="fact-value">₹{REGISTRATION_AMOUNT} per team</strong>
+            <span className="fact-sub">Razorpay gateway · All 6 builders included</span>
+          </div>
+
+          <div className="fact-card fact-card--contact">
+            <div className="fact-card-header">
+              <span className="fact-icon-wrap" aria-hidden="true">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+                </svg>
+              </span>
+              <span className="fact-pill fact-pill--dark">CONVENOR</span>
+            </div>
+            <span className="fact-label">Faculty Contact</span>
+            <strong className="fact-value">Kranthi Chowdary M</strong>
+            <span className="fact-sub">+91 99669 88369 · Asst. Professor, Forensic Science</span>
+          </div>
+        </div>
+
+        {/* Mandatory Requirement Rule Banner with 3 Tier Cards */}
         <div className="registration-rule-banner">
-          <div className="rule-banner-icon-col" aria-hidden="true">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-              <circle cx="9" cy="7" r="4" />
-              <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-            </svg>
+          <div className="rule-banner-header">
+            <div className="rule-banner-icon-col" aria-hidden="true">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+              </svg>
+            </div>
+            <div className="rule-banner-text-col">
+              <span className="rule-banner-tag">MANDATORY TEAM COMPOSITION</span>
+              <h2 className="rule-banner-title">One team. Exactly six builders.</h2>
+              <p className="rule-banner-desc">
+                <strong>"Exactly 6 students, all from Aditya University: 2 Forensic Science / CSDF students, 2 engineering or allied-branch students and 2 from any department."</strong>
+              </p>
+            </div>
           </div>
-          <div className="rule-banner-text-col">
-            <span className="rule-banner-tag">MANDATORY TEAM COMPOSITION</span>
-            <h2 className="rule-banner-title">One team. Exactly six builders.</h2>
-            <p className="rule-banner-desc">
-              <strong>"Exactly 6 students, all from Aditya University: 2 Forensic Science / CSDF students, 2 engineering or allied-branch students and 2 from any department."</strong>
-            </p>
-          </div>
-          <div className="rule-banner-fee-col">
-            <span className="fee-label">REGISTRATION FEE</span>
-            <span className="fee-amount">₹300</span>
-            <span className="fee-hint">Per team of 6</span>
+
+          <div className="rule-banner-tiers-grid">
+            <div className="rule-tier-card rule-tier-card--forensic">
+              <span className="rule-tier-badge">2 STUDENTS</span>
+              <h4>Forensic Science / CSDF</h4>
+              <p>Leads domain scope, evidence handling &amp; validation</p>
+            </div>
+
+            <div className="rule-tier-card rule-tier-card--engineering">
+              <span className="rule-tier-badge">2 STUDENTS</span>
+              <h4>Engineering &amp; Allied</h4>
+              <p>Builds the software, hardware, parsers &amp; technical MVP</p>
+            </div>
+
+            <div className="rule-tier-card rule-tier-card--open">
+              <span className="rule-tier-badge">2 STUDENTS</span>
+              <h4>Open Discipline (Any Dept)</h4>
+              <p>Supports interdisciplinary research, UI/UX &amp; final pitch</p>
+            </div>
           </div>
         </div>
 
@@ -596,6 +1165,39 @@ export default function RegistrationPage() {
 
                       <div className="member-fields-grid">
                         <div className="form-field-group">
+                          <div className="form-label-row">
+                            <label className="form-label required">Roll Number</label>
+                            {lookupStatuses[idx]?.status === 'loading' && (
+                              <span className="lookup-pill lookup-pill--loading">
+                                <span className="lookup-spinner"></span> Auto-fetching...
+                              </span>
+                            )}
+                            {lookupStatuses[idx]?.status === 'found' && (
+                              <span className="lookup-pill lookup-pill--found" title="Auto-populated from Aditya University ECAP portal">
+                                ✓ Verified: {lookupStatuses[idx].studentName}
+                              </span>
+                            )}
+                            {lookupStatuses[idx]?.status === 'not_found' && (
+                              <span className="lookup-pill lookup-pill--manual">
+                                Manual Entry
+                              </span>
+                            )}
+                          </div>
+                          <input
+                            type="text"
+                            className={`form-input ${lookupStatuses[idx]?.status === 'found' ? 'form-input--verified' : ''} ${validationErrors[`member_${idx}_rollNo`] ? 'form-input--error' : ''}`}
+                            placeholder="e.g. 22A91A..."
+                            value={m.rollNo}
+                            onChange={(e) => handleMemberChange(idx, 'rollNo', e.target.value.toUpperCase())}
+                            onBlur={() => triggerStudentLookup(idx, m.rollNo)}
+                            data-error-key={`member_${idx}_rollNo`}
+                          />
+                          {validationErrors[`member_${idx}_rollNo`] && (
+                            <span className="form-error-msg">{validationErrors[`member_${idx}_rollNo`]}</span>
+                          )}
+                        </div>
+
+                        <div className="form-field-group">
                           <label className="form-label required">Full Name</label>
                           <input
                             type="text"
@@ -611,22 +1213,7 @@ export default function RegistrationPage() {
                         </div>
 
                         <div className="form-field-group">
-                          <label className="form-label required">Roll Number / Student ID</label>
-                          <input
-                            type="text"
-                            className={`form-input ${validationErrors[`member_${idx}_rollNo`] ? 'form-input--error' : ''}`}
-                            placeholder="e.g. 22A91A..."
-                            value={m.rollNo}
-                            onChange={(e) => handleMemberChange(idx, 'rollNo', e.target.value.toUpperCase())}
-                            data-error-key={`member_${idx}_rollNo`}
-                          />
-                          {validationErrors[`member_${idx}_rollNo`] && (
-                            <span className="form-error-msg">{validationErrors[`member_${idx}_rollNo`]}</span>
-                          )}
-                        </div>
-
-                        <div className="form-field-group">
-                          <label className="form-label required">Aditya Email</label>
+                          <label className="form-label required">Email</label>
                           <input
                             type="email"
                             className={`form-input ${validationErrors[`member_${idx}_email`] ? 'form-input--error' : ''}`}
@@ -717,6 +1304,39 @@ export default function RegistrationPage() {
 
                       <div className="member-fields-grid">
                         <div className="form-field-group">
+                          <div className="form-label-row">
+                            <label className="form-label required">Roll Number</label>
+                            {lookupStatuses[idx]?.status === 'loading' && (
+                              <span className="lookup-pill lookup-pill--loading">
+                                <span className="lookup-spinner"></span> Auto-fetching...
+                              </span>
+                            )}
+                            {lookupStatuses[idx]?.status === 'found' && (
+                              <span className="lookup-pill lookup-pill--found" title="Auto-populated from Aditya University ECAP portal">
+                                ✓ Verified: {lookupStatuses[idx].studentName}
+                              </span>
+                            )}
+                            {lookupStatuses[idx]?.status === 'not_found' && (
+                              <span className="lookup-pill lookup-pill--manual">
+                                Manual Entry
+                              </span>
+                            )}
+                          </div>
+                          <input
+                            type="text"
+                            className={`form-input ${lookupStatuses[idx]?.status === 'found' ? 'form-input--verified' : ''} ${validationErrors[`member_${idx}_rollNo`] ? 'form-input--error' : ''}`}
+                            placeholder="e.g. 22A91A..."
+                            value={m.rollNo}
+                            onChange={(e) => handleMemberChange(idx, 'rollNo', e.target.value.toUpperCase())}
+                            onBlur={() => triggerStudentLookup(idx, m.rollNo)}
+                            data-error-key={`member_${idx}_rollNo`}
+                          />
+                          {validationErrors[`member_${idx}_rollNo`] && (
+                            <span className="form-error-msg">{validationErrors[`member_${idx}_rollNo`]}</span>
+                          )}
+                        </div>
+
+                        <div className="form-field-group">
                           <label className="form-label required">Full Name</label>
                           <input
                             type="text"
@@ -732,22 +1352,7 @@ export default function RegistrationPage() {
                         </div>
 
                         <div className="form-field-group">
-                          <label className="form-label required">Roll Number / Student ID</label>
-                          <input
-                            type="text"
-                            className={`form-input ${validationErrors[`member_${idx}_rollNo`] ? 'form-input--error' : ''}`}
-                            placeholder="e.g. 22A91A..."
-                            value={m.rollNo}
-                            onChange={(e) => handleMemberChange(idx, 'rollNo', e.target.value.toUpperCase())}
-                            data-error-key={`member_${idx}_rollNo`}
-                          />
-                          {validationErrors[`member_${idx}_rollNo`] && (
-                            <span className="form-error-msg">{validationErrors[`member_${idx}_rollNo`]}</span>
-                          )}
-                        </div>
-
-                        <div className="form-field-group">
-                          <label className="form-label required">Aditya Email</label>
+                          <label className="form-label required">Email</label>
                           <input
                             type="email"
                             className={`form-input ${validationErrors[`member_${idx}_email`] ? 'form-input--error' : ''}`}
@@ -832,6 +1437,39 @@ export default function RegistrationPage() {
 
                       <div className="member-fields-grid">
                         <div className="form-field-group">
+                          <div className="form-label-row">
+                            <label className="form-label required">Roll Number</label>
+                            {lookupStatuses[idx]?.status === 'loading' && (
+                              <span className="lookup-pill lookup-pill--loading">
+                                <span className="lookup-spinner"></span> Auto-fetching...
+                              </span>
+                            )}
+                            {lookupStatuses[idx]?.status === 'found' && (
+                              <span className="lookup-pill lookup-pill--found" title="Auto-populated from Aditya University ECAP portal">
+                                ✓ Verified: {lookupStatuses[idx].studentName}
+                              </span>
+                            )}
+                            {lookupStatuses[idx]?.status === 'not_found' && (
+                              <span className="lookup-pill lookup-pill--manual">
+                                Manual Entry
+                              </span>
+                            )}
+                          </div>
+                          <input
+                            type="text"
+                            className={`form-input ${lookupStatuses[idx]?.status === 'found' ? 'form-input--verified' : ''} ${validationErrors[`member_${idx}_rollNo`] ? 'form-input--error' : ''}`}
+                            placeholder="e.g. 22A91A..."
+                            value={m.rollNo}
+                            onChange={(e) => handleMemberChange(idx, 'rollNo', e.target.value.toUpperCase())}
+                            onBlur={() => triggerStudentLookup(idx, m.rollNo)}
+                            data-error-key={`member_${idx}_rollNo`}
+                          />
+                          {validationErrors[`member_${idx}_rollNo`] && (
+                            <span className="form-error-msg">{validationErrors[`member_${idx}_rollNo`]}</span>
+                          )}
+                        </div>
+
+                        <div className="form-field-group">
                           <label className="form-label required">Full Name</label>
                           <input
                             type="text"
@@ -847,22 +1485,7 @@ export default function RegistrationPage() {
                         </div>
 
                         <div className="form-field-group">
-                          <label className="form-label required">Roll Number / Student ID</label>
-                          <input
-                            type="text"
-                            className={`form-input ${validationErrors[`member_${idx}_rollNo`] ? 'form-input--error' : ''}`}
-                            placeholder="e.g. 22A91A..."
-                            value={m.rollNo}
-                            onChange={(e) => handleMemberChange(idx, 'rollNo', e.target.value.toUpperCase())}
-                            data-error-key={`member_${idx}_rollNo`}
-                          />
-                          {validationErrors[`member_${idx}_rollNo`] && (
-                            <span className="form-error-msg">{validationErrors[`member_${idx}_rollNo`]}</span>
-                          )}
-                        </div>
-
-                        <div className="form-field-group">
-                          <label className="form-label required">Aditya Email</label>
+                          <label className="form-label required">Email</label>
                           <input
                             type="email"
                             className={`form-input ${validationErrors[`member_${idx}_email`] ? 'form-input--error' : ''}`}
@@ -925,149 +1548,118 @@ export default function RegistrationPage() {
             </div>
           </div>
 
-          {/* STEP 3: Payment Verification & Submission */}
+          {/* STEP 3: Razorpay Payment Gateway & Submission */}
           <div className="form-card-section">
             <div className="form-card-header">
               <span className="step-num-badge">STEP 03</span>
               <div>
-                <h2 className="form-section-title">Payment Verification &amp; Submit</h2>
+                <h2 className="form-section-title">Online Payment &amp; Submission</h2>
                 <p className="form-section-desc">
-                  Registration fee is ₹300 per team. Complete your payment and provide transaction details.
+                  Registration fee is ₹{REGISTRATION_AMOUNT} per team. Complete secure online payment via Razorpay Payment Gateway.
                 </p>
               </div>
             </div>
 
-            <div className="payment-box-grid">
-              <div className="payment-instructions-card">
-                <span className="payment-badge">OFFICIAL UPI PAYMENT</span>
-                <h3>Aditya University Forensithon Desk</h3>
-                <div className="upi-details-list">
-                  <div className="upi-item">
-                    <span>UPI ID:</span>
-                    <code>aditya.forensithon@sbi</code>
+            <div className="payment-gateway-container">
+              <div className="payment-summary-box">
+                <div className="gateway-badge-row">
+                  <span className="gateway-badge">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="1" y="4" width="22" height="16" rx="2" ry="2" />
+                      <line x1="1" y1="10" x2="23" y2="10" />
+                    </svg>
+                    SECURED BY RAZORPAY
+                  </span>
+                  <span className="fee-tag">₹{REGISTRATION_AMOUNT}.00 · TEAM REGISTRATION</span>
+                </div>
+
+                <div className="payment-details-row">
+                  <div>
+                    <span className="pay-label">EVENT REGISTRATION</span>
+                    <h3 className="pay-title">FORENSITHON 2k26 · Six Builders Squad</h3>
+                    <p className="pay-desc">
+                      One payment of ₹{REGISTRATION_AMOUNT} covers all 6 registered team members. Instant online verification.
+                    </p>
                   </div>
-                  <div className="upi-item">
-                    <span>Beneficiary:</span>
-                    <strong>Forensic Science Department, Aditya University</strong>
-                  </div>
-                  <div className="upi-item">
-                    <span>Total Amount:</span>
-                    <strong className="upi-price">₹300.00</strong> (all 6 builders included)
+                  <div className="payment-amount-display">
+                    <span className="amount-currency">INR</span>
+                    <strong className="amount-number">₹{REGISTRATION_AMOUNT}</strong>
+                    <span className="amount-sub">Fixed team fee</span>
                   </div>
                 </div>
-                <p className="payment-note">
-                  Scan via GPay, PhonePe, Paytm or BHIM UPI and record your 12-digit UTR/Transaction Reference Number.
-                </p>
+
+                <div className="payment-methods-strip">
+                  <span className="methods-label">Accepted Payment Modes:</span>
+                  <div className="methods-pills">
+                    <span className="method-pill">UPI (GPay / PhonePe / Paytm / BHIM)</span>
+                    <span className="method-pill">Credit &amp; Debit Cards</span>
+                    <span className="method-pill">Net Banking</span>
+                    <span className="method-pill">Wallets</span>
+                  </div>
+                </div>
               </div>
 
-              <div className="payment-inputs-card">
-                <div className="form-field-group">
-                  <label htmlFor="utrNumber" className="form-label required">
-                    Transaction ID / UTR Number
-                  </label>
+              <div className="payment-terms-box">
+                <label className="checkbox-container">
                   <input
-                    id="utrNumber"
-                    type="text"
-                    className={`form-input ${validationErrors.utrNumber ? 'form-input--error' : ''}`}
-                    placeholder="e.g. 432109876543 (12 digits)"
-                    value={utrNumber}
+                    type="checkbox"
+                    checked={agreed}
                     onChange={(e) => {
-                      setUtrNumber(e.target.value);
-                      if (validationErrors.utrNumber) {
+                      setAgreed(e.target.checked);
+                      if (validationErrors.agreed) {
                         setValidationErrors((prev) => {
                           const copy = { ...prev };
-                          delete copy.utrNumber;
+                          delete copy.agreed;
                           return copy;
                         });
                       }
                     }}
-                    data-error-key="utrNumber"
+                    data-error-key="agreed"
                   />
-                  {validationErrors.utrNumber && (
-                    <span className="form-error-msg">{validationErrors.utrNumber}</span>
-                  )}
-                </div>
-
-                <div className="form-field-group" style={{ marginTop: '14px' }}>
-                  <label className="form-label">
-                    Upload Payment Screenshot <span className="label-optional">(Optional)</span>
-                  </label>
-                  <div className="file-upload-box">
-                    <input
-                      type="file"
-                      id="paymentProof"
-                      className="file-input-hidden"
-                      accept="image/*,.pdf"
-                      onChange={handleFileUpload}
-                    />
-                    <label htmlFor="paymentProof" className="file-upload-label">
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                        <polyline points="17 8 12 3 7 8" />
-                        <line x1="12" y1="3" x2="12" y2="15" />
-                      </svg>
-                      <span>{paymentFileName || 'Choose payment receipt / screenshot'}</span>
-                    </label>
-                  </div>
-                </div>
-
-                <div className="form-field-group" style={{ marginTop: '16px' }}>
-                  <label className="checkbox-container">
-                    <input
-                      type="checkbox"
-                      checked={agreed}
-                      onChange={(e) => {
-                        setAgreed(e.target.checked);
-                        if (validationErrors.agreed) {
-                          setValidationErrors((prev) => {
-                            const copy = { ...prev };
-                            delete copy.agreed;
-                            return copy;
-                          });
-                        }
-                      }}
-                      data-error-key="agreed"
-                    />
-                    <span className="checkbox-custom" />
-                    <span className="checkbox-label-text">
-                      I certify that all 6 team members are currently enrolled students of Aditya University, and strictly comply with the rule: <strong>2 Forensic Science/CSDF, 2 Engineering, and 2 from any department</strong>.
-                    </span>
-                  </label>
-                  {validationErrors.agreed && (
-                    <span className="form-error-msg" style={{ display: 'block', marginTop: '6px' }}>
-                      {validationErrors.agreed}
-                    </span>
-                  )}
-                </div>
+                  <span className="checkbox-custom" />
+                  <span className="checkbox-label-text">
+                    I certify that all 6 team members are currently enrolled students of Aditya University, and strictly comply with the rule: <strong>2 Forensic Science/CSDF, 2 Engineering, and 2 from any department</strong>.
+                  </span>
+                </label>
+                {validationErrors.agreed && (
+                  <span className="form-error-msg" style={{ display: 'block', marginTop: '6px' }}>
+                    {validationErrors.agreed}
+                  </span>
+                )}
               </div>
+
+              {paymentErrorMessage && (
+                <div className="payment-error-alert" role="alert">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="8" x2="12" y2="12" />
+                    <line x1="12" y1="16" x2="12.01" y2="16" />
+                  </svg>
+                  <span>{paymentErrorMessage}</span>
+                </div>
+              )}
             </div>
 
             <div className="form-submit-row">
-              <button type="submit" className="button submit-registration-btn">
-                Submit Team Registration (₹300) →
+              <button
+                type="submit"
+                className="button submit-registration-btn"
+                disabled={isProcessingPayment}
+              >
+                {isProcessingPayment ? (
+                  <span className="btn-loading-flex">
+                    <span className="spinner" /> Connecting to Razorpay Gateway...
+                  </span>
+                ) : (
+                  `Pay ₹${REGISTRATION_AMOUNT} via Razorpay & Complete Registration →`
+                )}
               </button>
               <p className="submit-hint">
-                Confirmation slip and Registration ID will be generated immediately upon submission.
+                A secure Razorpay payment window will open. Upon payment completion, your team registration is permanently stored in the university database.
               </p>
             </div>
           </div>
         </form>
-
-        {/* Facts strip at bottom */}
-        <div className="student-facts" style={{ marginTop: '36px' }}>
-          <div>
-            <span>Registration deadline</span>
-            <strong>5 December 2026</strong>
-          </div>
-          <div>
-            <span>Event dates</span>
-            <strong>9-10 December 2026</strong>
-          </div>
-          <div>
-            <span>Organiser contact</span>
-            <strong>Kranthi Chowdary M · +91 99669 88369</strong>
-          </div>
-        </div>
       </section>
     </main>
   );

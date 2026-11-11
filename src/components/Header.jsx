@@ -3,7 +3,7 @@ import { Link, NavLink } from 'react-router-dom';
 export default function Header({ motionOff, toggleMotion }) {
   return (
     <header className="site-header">
-      <Link to="/" title="FORENSITHON 2026 Home">
+      <Link to="/" title="FORENSITHON 2k26 Home">
         <img
           className="emblem"
           src={`${import.meta.env.BASE_URL}aditya-university-logo.jpg`}
@@ -12,7 +12,7 @@ export default function Header({ motionOff, toggleMotion }) {
       </Link>
       <div className="header-identity">
         <Link className="brand" to="/">
-          FORENSITHON 2026
+          FORENSITHON 2k26
         </Link>
         <p className="header-organised">Organised by</p>
         <p className="header-subtitle">

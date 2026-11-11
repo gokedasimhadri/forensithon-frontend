@@ -143,7 +143,7 @@ export default function RoundsPage() {
         <h1 className="page-title">Present. Build. Prove.</h1>
         <p>
           Three rounds. Selected teams move from an online presentation to the two-day offline event
-          on 9-10 December 2026.
+          on 9-10 December 2k26.
         </p>
 
         <div className="rounds-stepper-flow">

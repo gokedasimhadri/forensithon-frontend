@@ -1,5 +1,5 @@
-import { useState, useMemo, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useMemo, useRef, useEffect } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { eventData } from '../data/eventData';
 
 const PAGE_SIZE = 10;
@@ -14,12 +14,25 @@ const DOMAIN_SHORT_NAMES = {
 };
 
 export default function ChallengesPage({ motionOff }) {
+  const [searchParams] = useSearchParams();
+  const domainQuery = searchParams.get('domain');
+
   const [search, setSearch] = useState('');
-  const [selectedDomain, setSelectedDomain] = useState('all');
+  const [selectedDomain, setSelectedDomain] = useState(
+    domainQuery && ['1', '2', '3', '4', '5', '6'].includes(domainQuery) ? domainQuery : 'all'
+  );
   const [page, setPage] = useState(1);
   const [expandedCards, setExpandedCards] = useState(new Set());
   const searchInputRef = useRef(null);
   const filtersRef = useRef(null);
+
+  useEffect(() => {
+    const q = searchParams.get('domain');
+    if (q && ['1', '2', '3', '4', '5', '6'].includes(q)) {
+      setSelectedDomain(q);
+      setPage(1);
+    }
+  }, [searchParams]);
 
   const filteredChallenges = useMemo(() => {
     const q = search.trim().toLowerCase();

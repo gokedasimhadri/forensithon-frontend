@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { eventData } from '../data/eventData';
 
 export default function HomePage() {
   return (
@@ -15,9 +16,9 @@ export default function HomePage() {
         </svg>
         <div className="hero-copy">
           <p className="eyebrow hero-kicker">FORENSIC INNOVATION HACKATHON</p>
-          <p className="hero-event">9-10 December 2026 · 6 students per team</p>
+          <p className="hero-event">9-10 December 2k26 · 6 students per team</p>
           <div className="case-stamp">
-            CASE FILE <strong>2026</strong>
+            CASE FILE <strong>2k26</strong>
           </div>
           <h1>
             FORENSI<span>THON</span>
@@ -52,7 +53,7 @@ export default function HomePage() {
       <div className="event-strip">
         <div>
           <span>DATES</span>
-          <strong>9-10 December 2026</strong>
+          <strong>9-10 December 2k26</strong>
         </div>
         <div>
           <span>TEAM</span>
@@ -60,178 +61,110 @@ export default function HomePage() {
         </div>
       </div>
 
-      <section className="section home-brief">
-        <p className="eyebrow">ONE EVENT. BOTH DISCIPLINES.</p>
-        <h2>
-          Six minds.
-          <br />
-          One forensic challenge.
-        </h2>
-        <p>
-          Build practical prototypes for forensic examination, digital investigation, evidence
-          management and public safety.
-        </p>
-        {/* Stepper Flow matching 2nd reference image */}
-        <div className="stepper-flow">
-          <Link to="/registration" className="step-card">
-            <div className="step-icon-wrap">
-              <span className="step-badge">1</span>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ff5500" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                <circle cx="9" cy="7" r="4" />
-                <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-              </svg>
-            </div>
-            <div className="step-info">
-              <strong>Form your team</strong>
-              <span>4–6 builders. The lead registers everyone at once.</span>
-            </div>
-          </Link>
-
-          <div className="step-arrow" aria-hidden="true">→</div>
-
-          <Link to="/challenges" className="step-card">
-            <div className="step-icon-wrap">
-              <span className="step-badge">2</span>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ff5500" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z" />
-                <path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z" />
-                <path d="M9 12H4s.55-3.03 2-4.5c1.45-1.47 4.5-2 4.5-2" />
-                <path d="M12 9V4s3.03.55 4.5 2c1.47 1.45 2 4.5 2 4.5" />
-              </svg>
-            </div>
-            <div className="step-info">
-              <strong>Submit for Level 1</strong>
-              <span>Free. Send your working prototype for screening.</span>
-            </div>
-          </Link>
-
-          <div className="step-arrow" aria-hidden="true">→</div>
-
-          <Link to="/rounds" className="step-card">
-            <div className="step-icon-wrap">
-              <span className="step-badge">3</span>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ff5500" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
-                <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
-                <path d="M4 22h16" />
-                <path d="M10 14.66V17c0 .55-.45 1-1 1H8c-.55 0-1 .45-1 1v1h10v-1c0-.55-.45-1-1-1h-1c-.55 0-1-.45-1-1v-2.34" />
-                <path d="M6 4h12a2 2 0 0 1 2 2v3a6 6 0 0 1-6 6h-4a6 6 0 0 1-6-6V6a2 2 0 0 1 2-2z" />
-              </svg>
-            </div>
-            <div className="step-info">
-              <strong>Build at Level 2</strong>
-              <span>Shortlisted? Confirm your seat and build for 48 hours.</span>
-            </div>
-          </Link>
-        </div>
-
-        {/* Level Cards matching 2nd reference image */}
-        <div className="level-cards-grid">
-          <div className="level-card level-card--light">
-            <div className="level-card-header">
-              <div>
-                <span className="level-eyebrow">LEVEL 01</span>
-                <h3 className="level-title">PROTOTYPE SCREENING</h3>
-              </div>
-              <span className="level-badge-free">FREE</span>
-            </div>
-
-            <ul className="level-checklist">
-              <li className="level-check-item">
-                <span className="check-circle check-circle--light" aria-hidden="true">
-                  <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
-                    <circle cx="10" cy="10" r="10" fill="#fff1eb" />
-                    <path d="M6 10.5L8.5 13L14 7.5" stroke="#ff5500" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </span>
-                <span>Free — submit your existing working prototype, no card needed</span>
-              </li>
-              <li className="level-check-item">
-                <span className="check-circle check-circle--light" aria-hidden="true">
-                  <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
-                    <circle cx="10" cy="10" r="10" fill="#fff1eb" />
-                    <path d="M6 10.5L8.5 13L14 7.5" stroke="#ff5500" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </span>
-                <span>Teams of 4–6 (team lead + members)</span>
-              </li>
-              <li className="level-check-item">
-                <span className="check-circle check-circle--light" aria-hidden="true">
-                  <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
-                    <circle cx="10" cy="10" r="10" fill="#fff1eb" />
-                    <path d="M6 10.5L8.5 13L14 7.5" stroke="#ff5500" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </span>
-                <span>Screened on problem relevance, prototype credibility, feasibility, clarity and originality</span>
-              </li>
-              <li className="level-check-item">
-                <span className="check-circle check-circle--light" aria-hidden="true">
-                  <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
-                    <circle cx="10" cy="10" r="10" fill="#fff1eb" />
-                    <path d="M6 10.5L8.5 13L14 7.5" stroke="#ff5500" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </span>
-                <span>Ownership verification: a short viva, commit-history and similarity check</span>
-              </li>
-            </ul>
-
-            <Link to="/registration" className="level-button">
-              REGISTER FOR LEVEL 1 <span>→</span>
-            </Link>
+      <section className="section home-domains-section" id="summary-of-domains">
+        <div className="domains-container">
+          <div className="domains-heading-wrap">
+            <p className="eyebrow">SIX INVESTIGATIVE TRACKS · 60 PROBLEM STATEMENTS</p>
+            <h2 className="domains-main-heading">
+              <span className="heading-accent-dot" aria-hidden="true">■</span> Summary of Domains
+            </h2>
+            <p className="domains-main-desc">
+              Explore the six core investigative domains of Forensithon 2k26. Every registered squad of six chooses exactly one challenge statement from across these specialized domains.
+            </p>
           </div>
 
-          <div className="level-card level-card--dark">
-            <div className="level-card-header">
-              <div>
-                <span className="level-eyebrow">LEVEL 02</span>
-                <h3 className="level-title">ENHANCEMENT CHALLENGE</h3>
-                <div className="level-badge-price">₹800 / MEMBER</div>
-              </div>
+          {/* Executive Summary Table matching Reference Image 2 */}
+          <div className="domains-table-card">
+            <div className="domains-table-wrapper">
+              <table className="domains-summary-table">
+                <thead>
+                  <tr>
+                    <th scope="col" className="col-domain">Domain</th>
+                    <th scope="col" className="col-title">Domain Title</th>
+                    <th scope="col" className="col-ids">Problem IDs</th>
+                    <th scope="col" className="col-focus">Core Focus</th>
+                    <th scope="col" className="col-action">Challenges</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {eventData.domains.map((dom) => (
+                    <tr key={dom.number} className="domain-row">
+                      <td className="cell-domain">
+                        <span className="domain-index-badge">{dom.number}</span>
+                      </td>
+                      <td className="cell-title">
+                        <strong className="domain-title-text">{dom.title}</strong>
+                      </td>
+                      <td className="cell-ids">
+                        <span className="domain-ids-pill">{dom.ids}</span>
+                      </td>
+                      <td className="cell-focus">
+                        <p className="domain-focus-desc">{dom.focus}</p>
+                      </td>
+                      <td className="cell-action">
+                        <Link
+                          to={`/challenges?domain=${dom.number}`}
+                          className="domain-table-link"
+                          title={`View all 10 problem statements under ${dom.title}`}
+                        >
+                          Explore <span aria-hidden="true">→</span>
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
 
-            <ul className="level-checklist">
-              <li className="level-check-item">
-                <span className="check-circle check-circle--dark" aria-hidden="true">
-                  <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
-                    <circle cx="10" cy="10" r="10" fill="#ff5500" />
-                    <path d="M6 10.5L8.5 13L14 7.5" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </span>
-                <span>Only shortlisted teams are invited — same registration, no second form</span>
-              </li>
-              <li className="level-check-item">
-                <span className="check-circle check-circle--dark" aria-hidden="true">
-                  <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
-                    <circle cx="10" cy="10" r="10" fill="#ff5500" />
-                    <path d="M6 10.5L8.5 13L14 7.5" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </span>
-                <span>Pay ₹800 per member and upload the required documents</span>
-              </li>
-              <li className="level-check-item">
-                <span className="check-circle check-circle--dark" aria-hidden="true">
-                  <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
-                    <circle cx="10" cy="10" r="10" fill="#ff5500" />
-                    <path d="M6 10.5L8.5 13L14 7.5" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </span>
-                <span>48-hour on-site build against two mandatory enhancements + one optional stretch goal</span>
-              </li>
-              <li className="level-check-item">
-                <span className="check-circle check-circle--dark" aria-hidden="true">
-                  <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
-                    <circle cx="10" cy="10" r="10" fill="#ff5500" />
-                    <path d="M6 10.5L8.5 13L14 7.5" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </span>
-                <span>Judged live by a technical jury at Aditya University</span>
-              </li>
-            </ul>
+            <div className="domains-card-footer">
+              <div className="domains-stat-box">
+                <span className="domains-stat-label">OFFICIAL CHALLENGE CATALOGUE</span>
+                <strong className="domains-stat-value">6 Domains · 60 Problem Statements (10 per domain)</strong>
+              </div>
+              <Link to="/challenges" className="button small">
+                View All 60 Statements ↗
+              </Link>
+            </div>
+          </div>
 
-            <div className="level-footer-note">
-              BY INVITATION · 18–20 DECEMBER 2026 · ADITYA UNIVERSITY
+          {/* Mobile-Friendly Cards View (auto-displayed on narrow viewports) */}
+          <div className="domains-mobile-view" aria-label="Summary of domains mobile view">
+            {eventData.domains.map((dom) => (
+              <div key={dom.number} className="domain-card-item">
+                <div className="domain-card-top-row">
+                  <span className="domain-index-badge">Domain {dom.number}</span>
+                  <span className="domain-ids-pill">{dom.ids}</span>
+                </div>
+                <h3 className="domain-card-title">{dom.title}</h3>
+                <p className="domain-card-focus-text">
+                  <span className="focus-label">Core Focus: </span>
+                  {dom.focus}
+                </p>
+                <Link
+                  to={`/challenges?domain=${dom.number}`}
+                  className="domain-card-action-btn"
+                >
+                  View 10 Challenges in Domain {dom.number} →
+                </Link>
+              </div>
+            ))}
+          </div>
+
+          {/* Bottom Call to Action Strip */}
+          <div className="domains-cta-strip">
+            <div className="domains-cta-info">
+              <h3>Ready to pick your challenge?</h3>
+              <p>
+                Form your squad of 6 Aditya University students: 2 Forensic Science/CSDF, 2 Engineering, and 2 from any department.
+              </p>
+            </div>
+            <div className="domains-cta-links">
+              <Link to="/challenges" className="button">
+                Explore All 60 Challenges ↗
+              </Link>
+              <Link to="/registration" className="button secondary">
+                Register as Six →
+              </Link>
             </div>
           </div>
         </div>
