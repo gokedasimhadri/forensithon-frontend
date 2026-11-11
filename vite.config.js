@@ -7,6 +7,8 @@ export default defineConfig(({ mode }) => {
   const target = env.VITE_API_URL
 
   return {
+    base: '/',
+
     plugins: [react()],
 
     define: {
