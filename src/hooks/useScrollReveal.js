@@ -19,7 +19,9 @@ export function useScrollReveal() {
       { threshold: 0.08 }
     );
 
-    const elements = document.querySelectorAll('.section, .round-grid article, .quick-grid a, .criterion');
+    const elements = document.querySelectorAll(
+      '.section, .round-grid article, .quick-grid a, .criterion, .step-card, .level-card, .challenge-card, .round-step-card, .guideline-modern-card, .team-tier-card, .submission-step-card'
+    );
     elements.forEach((el) => observer.observe(el));
 
     return () => {
