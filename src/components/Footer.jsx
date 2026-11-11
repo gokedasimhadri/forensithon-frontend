@@ -5,7 +5,7 @@ export default function Footer() {
     <footer>
       <img
         className="footer-logo"
-        src="/aditya-university-logo.jpg"
+        src={`${import.meta.env.BASE_URL}aditya-university-logo.jpg`}
         alt="Aditya University logo"
       />
       <strong>FORENSITHON 2026</strong>

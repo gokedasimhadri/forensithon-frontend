@@ -96,7 +96,7 @@ export default function ChallengesPage({ motionOff }) {
                 onClick={() => handleDomainCardClick(d.number)}
               >
                 <div className="domain-badge" aria-hidden="true">
-                  <img src={`/domain-${d.number}.svg`} alt="" />
+                  <img src={`${import.meta.env.BASE_URL}domain-${d.number}.svg`} alt="" />
                 </div>
                 <span>{d.ids}</span>
                 <h3>{d.title}</h3>
@@ -190,7 +190,7 @@ export default function ChallengesPage({ motionOff }) {
         <div style={{ marginTop: '30px' }}>
           <p className="noscript-note">
             Download the official{' '}
-            <a href="/FORENSITHON-Challenge-Catalogue.docx" download>
+            <a href={`${import.meta.env.BASE_URL}FORENSITHON-Challenge-Catalogue.docx`} download>
               FORENSITHON Challenge Catalogue (DOCX)
             </a>{' '}
             to explore all 60 problem statements.

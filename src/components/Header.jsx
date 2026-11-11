@@ -6,7 +6,7 @@ export default function Header({ motionOff, toggleMotion }) {
       <Link to="/" title="FORENSITHON 2026 Home">
         <img
           className="emblem"
-          src="/aditya-university-logo.jpg"
+          src={`${import.meta.env.BASE_URL}aditya-university-logo.jpg`}
           alt="Aditya University logo"
         />
       </Link>

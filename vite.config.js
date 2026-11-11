@@ -7,9 +7,10 @@ export default defineConfig(({ mode }) => {
   const target = env.VITE_API_URL
 
   return {
-    base: '/',
-
     plugins: [react()],
+
+    // IMPORTANT: Production deployment path
+    base: '/forensithon/',
 
     define: {
       'import.meta.env.VITE_API_URL': JSON.stringify(target),

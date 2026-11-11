@@ -40,7 +40,7 @@ export default function HomePage() {
             height="875"
             fetchPriority="high"
             className="hero-team"
-            src="/investigator-team.webp"
+            src={`${import.meta.env.BASE_URL}investigator-team.webp`}
             alt="Illustration of four student investigators with a laptop, magnifier, camera and lab tools"
           />
           <span className="illustration-label">Conceptual illustration</span>
