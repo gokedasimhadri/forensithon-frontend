@@ -7,8 +7,6 @@ export default defineConfig(({ mode }) => {
   const target = env.VITE_API_URL
 
   return {
-    base: '/forensithon/',
-
     plugins: [react()],
 
     define: {
