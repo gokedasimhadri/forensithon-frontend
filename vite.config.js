@@ -13,6 +13,7 @@ export default defineConfig(({ mode }) => {
       'process.env.VITE_API_URL': JSON.stringify(target)
     },
     server: {
+      base: '/forensithon/',
       proxy: {
         '/api': {
           target,
