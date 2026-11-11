@@ -1,19 +1,22 @@
+
 import react from '@vitejs/plugin-react'
 import { defineConfig, loadEnv } from 'vite'
 
-// https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
-  const target = env.VITE_API_URL;
+  const target = env.VITE_API_URL
 
   return {
+    base: '/forensithon/',
+
     plugins: [react()],
+
     define: {
       'import.meta.env.VITE_API_URL': JSON.stringify(target),
       'process.env.VITE_API_URL': JSON.stringify(target)
     },
+
     server: {
-      base: '/forensithon/',
       proxy: {
         '/api': {
           target,
@@ -38,6 +41,6 @@ export default defineConfig(({ mode }) => {
       allowedHosts: [
         'events.adityauniversity.in'
       ]
-    },
+    }
   }
 })
