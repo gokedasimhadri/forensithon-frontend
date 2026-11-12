@@ -2,8 +2,6 @@ import { useState, useMemo, useRef, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { eventData } from '../data/eventData';
 
-const PAGE_SIZE = 10;
-
 const DOMAIN_SHORT_NAMES = {
   1: 'Digital Forensics',
   2: 'Smart CSI & Media',
@@ -13,26 +11,58 @@ const DOMAIN_SHORT_NAMES = {
   6: 'Forensic Intelligence'
 };
 
+const DOMAIN_CODES = {
+  1: 'DF',
+  2: 'CSI',
+  3: 'FID',
+  4: 'BIO',
+  5: 'CHEM',
+  6: 'INT'
+};
+
 export default function ChallengesPage({ motionOff }) {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const domainQuery = searchParams.get('domain');
 
   const [search, setSearch] = useState('');
   const [selectedDomain, setSelectedDomain] = useState(
     domainQuery && ['1', '2', '3', '4', '5', '6'].includes(domainQuery) ? domainQuery : 'all'
   );
-  const [page, setPage] = useState(1);
+  const [viewMode, setViewMode] = useState('detailed'); // 'detailed' | 'compact'
   const [expandedCards, setExpandedCards] = useState(new Set());
-  const searchInputRef = useRef(null);
-  const filtersRef = useRef(null);
+  const resultsRef = useRef(null);
 
+  // Sync with URL query parameter
   useEffect(() => {
     const q = searchParams.get('domain');
     if (q && ['1', '2', '3', '4', '5', '6'].includes(q)) {
       setSelectedDomain(q);
-      setPage(1);
+    } else if (!q) {
+      setSelectedDomain('all');
     }
   }, [searchParams]);
+
+  const handleSelectDomain = (domain) => {
+    const nextDomain = String(domain);
+    setSelectedDomain(nextDomain);
+    if (nextDomain === 'all') {
+      searchParams.delete('domain');
+      setSearchParams(searchParams, { replace: true });
+    } else {
+      setSearchParams({ domain: nextDomain }, { replace: true });
+    }
+    if (resultsRef.current) {
+      resultsRef.current.scrollIntoView({
+        behavior: motionOff ? 'auto' : 'smooth',
+        block: 'start'
+      });
+    }
+  };
+
+  const activeDomainObj = useMemo(() => {
+    if (selectedDomain === 'all') return null;
+    return eventData.domains.find((d) => String(d.number) === selectedDomain) || null;
+  }, [selectedDomain]);
 
   const filteredChallenges = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -43,21 +73,6 @@ export default function ChallengesPage({ motionOff }) {
       return matchesDomain && matchesSearch;
     });
   }, [search, selectedDomain]);
-
-  const totalPages = Math.max(1, Math.ceil(filteredChallenges.length / PAGE_SIZE));
-  const currentPage = Math.min(page, totalPages);
-
-  const visibleChallenges = useMemo(() => {
-    const start = (currentPage - 1) * PAGE_SIZE;
-    return filteredChallenges.slice(start, start + PAGE_SIZE);
-  }, [filteredChallenges, currentPage]);
-
-  const allVisibleOpen = useMemo(() => {
-    return (
-      visibleChallenges.length > 0 &&
-      visibleChallenges.every((c) => expandedCards.has(c.id))
-    );
-  }, [visibleChallenges, expandedCards]);
 
   const toggleCard = (id) => {
     setExpandedCards((prev) => {
@@ -71,368 +86,336 @@ export default function ChallengesPage({ motionOff }) {
     });
   };
 
-  const toggleAllCards = () => {
-    if (allVisibleOpen) {
-      setExpandedCards(new Set());
-    } else {
-      setExpandedCards(new Set(visibleChallenges.map((c) => c.id)));
-    }
-  };
-
-  const scrollToFilters = () => {
-    if (filtersRef.current) {
-      filtersRef.current.scrollIntoView({
-        behavior: motionOff ? 'auto' : 'smooth',
-        block: 'start'
-      });
-    }
-  };
-
-  const handleDomainCardClick = (domainNumber) => {
-    setSearch('');
-    setSelectedDomain(String(domainNumber));
-    setPage(1);
-    scrollToFilters();
-  };
-
-  const handlePillClick = (domain) => {
-    setSelectedDomain(String(domain));
-    setPage(1);
-  };
-
-  const handleSearchChange = (e) => {
-    setSearch(e.target.value);
-    setPage(1);
-  };
-
   const handleClearFilters = () => {
     setSearch('');
-    setSelectedDomain('all');
-    setPage(1);
-    if (searchInputRef.current) {
-      searchInputRef.current.focus();
-    }
-  };
-
-  const handlePageChange = (newPage) => {
-    setPage(newPage);
-    scrollToFilters();
+    handleSelectDomain('all');
   };
 
   return (
     <main id="main-content">
-      <section id="challenges" className="section">
-        <p className="eyebrow">OFFICIAL CHALLENGE CATALOGUE</p>
-        <h1 className="page-title">Find your problem.</h1>
-        <p>
-          Six domains, ten challenges each. Open a challenge to see both roles. Teams may refine
-          the scope with mentors.
-        </p>
-        <p className="domain-hint">Select a domain or browse the challenges below.</p>
-
-        <details className="domain-browser" open>
-          <summary>Browse the six forensic domains</summary>
-          <div id="domains" className="domains">
-            {eventData.domains.map((d) => (
-              <button
-                key={d.number}
-                type="button"
-                className="domain-card"
-                data-domain={d.number}
-                aria-pressed={selectedDomain === String(d.number)}
-                onClick={() => handleDomainCardClick(d.number)}
-              >
-                <div className="domain-badge" aria-hidden="true">
-                  <img src={`${import.meta.env.BASE_URL}domain-${d.number}.svg`} alt="" />
-                </div>
-                <span>{d.ids}</span>
-                <h3>{d.title}</h3>
-              </button>
-            ))}
+      <div className="challenges-page-container">
+        {/* Header Block */}
+        <header className="challenges-header-wrap">
+          <div className="challenges-header-badge">
+            <span className="badge-pulse-dot" aria-hidden="true"></span>
+            OFFICIAL CHALLENGE CATALOGUE · 60 PROBLEM STATEMENTS
           </div>
-        </details>
+          <h1 className="challenges-main-title">Investigative Challenges</h1>
+          <p className="challenges-main-desc">
+            Forensithon 2k26 features 60 real-world case files across six specialized forensic tracks. Every team selects <strong>one challenge</strong>. Each statement defines two balanced scopes: a <strong>Forensic Science Scope</strong> and a <strong>Technical / Engineering Scope</strong>.
+          </p>
+        </header>
 
-        {/* Modern Catalog Control Toolbar */}
-        <div className="catalog-toolbar" ref={filtersRef}>
-          <div className="catalog-search-row">
-            <div className="catalog-search-box">
-              <span className="search-icon" aria-hidden="true">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="11" cy="11" r="8" />
-                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                </svg>
-              </span>
-              <input
-                id="search"
-                ref={searchInputRef}
-                type="search"
-                value={search}
-                onChange={handleSearchChange}
-                placeholder="Search challenges by ID, keyword, or role (e.g. DF-01, DNA, audio, triage)..."
-                aria-label="Search challenges"
-              />
-              {search && (
-                <button
-                  type="button"
-                  className="search-clear-btn"
-                  onClick={() => { setSearch(''); setPage(1); }}
-                  aria-label="Clear search"
-                >
-                  ✕
-                </button>
-              )}
-            </div>
-
-            <div className="catalog-toolbar-actions">
-              <button
-                type="button"
-                className="toggle-all-btn"
-                onClick={toggleAllCards}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  {allVisibleOpen ? (
-                    <polyline points="18 15 12 9 6 15" />
-                  ) : (
-                    <polyline points="6 9 12 15 18 9" />
-                  )}
-                </svg>
-                {allVisibleOpen ? 'Collapse All' : 'Expand All'}
-              </button>
-
-              {(search || selectedDomain !== 'all') && (
-                <button
-                  type="button"
-                  className="reset-filters-btn"
-                  onClick={handleClearFilters}
-                >
-                  Reset All
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Quick Domain Pills */}
-          <div className="domain-pills-row" role="tablist" aria-label="Filter by domain">
+        {/* Unified Domain / Track Navigation Hub */}
+        <nav className="track-nav-container" aria-label="Challenge Tracks">
+          <div className="track-nav-scroll">
             <button
               type="button"
-              role="tab"
-              aria-selected={selectedDomain === 'all'}
-              className={`domain-pill ${selectedDomain === 'all' ? 'active' : ''}`}
-              onClick={() => handlePillClick('all')}
+              className={`track-tab track-tab--all ${selectedDomain === 'all' ? 'active' : ''}`}
+              onClick={() => handleSelectDomain('all')}
+              aria-pressed={selectedDomain === 'all'}
             >
-              All Domains <span className="pill-count">60</span>
+              <div className="track-tab-header">
+                <span className="track-tab-code">ALL</span>
+                <span className="track-tab-count">60</span>
+              </div>
+              <strong className="track-tab-name">All 6 Tracks</strong>
+              <span className="track-tab-range">DF-01 to INT-10</span>
             </button>
 
-            {eventData.domains.map((d) => (
+            {eventData.domains.map((dom) => {
+              const isActive = selectedDomain === String(dom.number);
+              const code = DOMAIN_CODES[dom.number] || `D0${dom.number}`;
+              const shortName = DOMAIN_SHORT_NAMES[dom.number] || dom.title.split(',')[0];
+
+              return (
+                <button
+                  key={dom.number}
+                  type="button"
+                  className={`track-tab ${isActive ? 'active' : ''}`}
+                  onClick={() => handleSelectDomain(dom.number)}
+                  aria-pressed={isActive}
+                >
+                  <div className="track-tab-header">
+                    <span className="track-tab-code">{code}</span>
+                    <span className="track-tab-count">10</span>
+                  </div>
+                  <strong className="track-tab-name">{shortName}</strong>
+                  <span className="track-tab-range">{dom.ids}</span>
+                </button>
+              );
+            })}
+          </div>
+        </nav>
+
+        {/* Active Track Overview Banner */}
+        <div className="domain-context-card" ref={resultsRef}>
+          {activeDomainObj ? (
+            <>
+              <div className="domain-context-top">
+                <div className="context-track-badge">
+                  <span className="track-num">TRACK 0{activeDomainObj.number}</span>
+                  <span className="track-range">{activeDomainObj.ids}</span>
+                  <span className="track-status">10 Challenges</span>
+                </div>
+                <button
+                  type="button"
+                  className="context-reset-btn"
+                  onClick={() => handleSelectDomain('all')}
+                >
+                  View All Tracks ✕
+                </button>
+              </div>
+              <h2 className="domain-context-title">{activeDomainObj.title}</h2>
+              <p className="domain-context-focus">
+                <strong className="focus-label">Investigative Scope: </strong>
+                {activeDomainObj.focus}
+              </p>
+            </>
+          ) : (
+            <>
+              <div className="domain-context-top">
+                <div className="context-track-badge">
+                  <span className="track-num">ALL SIX TRACKS</span>
+                  <span className="track-range">DF-01 TO INT-10</span>
+                  <span className="track-status">60 Challenges Total</span>
+                </div>
+              </div>
+              <h2 className="domain-context-title">Full Challenge Repository</h2>
+              <p className="domain-context-focus">
+                Showing all 60 problem statements across 6 specialized forensic disciplines. Use the track cards above to filter by a specific discipline, or search below.
+              </p>
+            </>
+          )}
+        </div>
+
+        {/* Search & View Controls Bar */}
+        <div className="challenges-toolbar">
+          <div className="search-input-wrapper">
+            <span className="search-icon-symbol" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+            </span>
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search challenges by ID, keyword, or role (e.g. DF-01, DNA, audio, CCTV, memory)..."
+              className="challenges-search-input"
+              aria-label="Search challenges"
+            />
+            {search && (
               <button
-                key={d.number}
                 type="button"
-                role="tab"
-                aria-selected={selectedDomain === String(d.number)}
-                className={`domain-pill ${selectedDomain === String(d.number) ? 'active' : ''}`}
-                onClick={() => handlePillClick(d.number)}
+                className="clear-search-btn"
+                onClick={() => setSearch('')}
+                aria-label="Clear search"
               >
-                <span className="pill-code">{d.ids.split(' ')[0].split('-')[0]}</span>
-                <span className="pill-name">{DOMAIN_SHORT_NAMES[d.number] || d.title.split(',')[0]}</span>
-                <span className="pill-count">10</span>
+                ✕
               </button>
-            ))}
+            )}
           </div>
 
-          {/* Status Bar */}
-          <div className="catalog-status-bar">
-            <div className="catalog-count-info">
-              <span className="count-num">{filteredChallenges.length}</span> of 60 challenges available
-              {selectedDomain !== 'all' && (
-                <span className="filter-pill-tag">
-                  Domain {selectedDomain}: {DOMAIN_SHORT_NAMES[selectedDomain]}
-                  <button type="button" onClick={() => setSelectedDomain('all')} aria-label="Clear domain filter">×</button>
-                </span>
-              )}
-              {search && (
-                <span className="filter-pill-tag">
-                  Keyword: "{search}"
-                  <button type="button" onClick={() => setSearch('')} aria-label="Clear keyword filter">×</button>
-                </span>
-              )}
+          <div className="toolbar-controls-group">
+            <div className="results-count-chip">
+              <strong>{filteredChallenges.length}</strong> of 60 statements
             </div>
 
-            <div className="catalog-page-label">
-              Page {currentPage} of {totalPages}
+            <div className="view-mode-switch" role="group" aria-label="Card view mode">
+              <button
+                type="button"
+                className={`view-mode-btn ${viewMode === 'detailed' ? 'active' : ''}`}
+                onClick={() => setViewMode('detailed')}
+                title="Detailed View: Both Forensic and Technical scopes visible immediately"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="8" y1="6" x2="21" y2="6" />
+                  <line x1="8" y1="12" x2="21" y2="12" />
+                  <line x1="8" y1="18" x2="21" y2="18" />
+                  <line x1="3" y1="6" x2="3.01" y2="6" />
+                  <line x1="3" y1="12" x2="3.01" y2="12" />
+                  <line x1="3" y1="18" x2="3.01" y2="18" />
+                </svg>
+                Detailed
+              </button>
+              <button
+                type="button"
+                className={`view-mode-btn ${viewMode === 'compact' ? 'active' : ''}`}
+                onClick={() => setViewMode('compact')}
+                title="Compact View: Minimal card titles with expand button"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="7" height="7" />
+                  <rect x="14" y="3" width="7" height="7" />
+                  <rect x="14" y="14" width="7" height="7" />
+                  <rect x="3" y="14" width="7" height="7" />
+                </svg>
+                Compact
+              </button>
             </div>
           </div>
         </div>
 
-        {/* Challenges Grid in New Pattern */}
+        {/* Filter Tags Summary */}
+        {(search || selectedDomain !== 'all') && (
+          <div className="active-filters-summary">
+            <span className="filters-label">Active Filters:</span>
+            {selectedDomain !== 'all' && (
+              <span className="active-tag">
+                Track: {DOMAIN_SHORT_NAMES[selectedDomain]} ({DOMAIN_CODES[selectedDomain]})
+                <button type="button" onClick={() => handleSelectDomain('all')} aria-label="Remove track filter">×</button>
+              </span>
+            )}
+            {search && (
+              <span className="active-tag">
+                Keyword: "{search}"
+                <button type="button" onClick={() => setSearch('')} aria-label="Remove keyword search">×</button>
+              </span>
+            )}
+            <button
+              type="button"
+              className="clear-all-filters-btn"
+              onClick={handleClearFilters}
+            >
+              Reset All Filters
+            </button>
+          </div>
+        )}
+
+        {/* Challenge Cards Feed */}
         {filteredChallenges.length === 0 ? (
-          <div className="no-challenges-card">
-            <div className="no-results-icon" aria-hidden="true">🔍</div>
-            <h3>No matching challenges found</h3>
-            <p>Try searching for a different keyword or select "All Domains" to browse all 60 problem statements.</p>
-            <button type="button" className="button secondary" onClick={handleClearFilters}>
-              Clear Search &amp; Filters
+          <div className="no-challenges-state">
+            <div className="no-challenges-icon" aria-hidden="true">🔍</div>
+            <h3>No problem statements match your search</h3>
+            <p>Try searching for a different keyword (e.g. "fingerprint", "blockchain", "DNA", "mobile") or switch to another track.</p>
+            <button
+              type="button"
+              className="button"
+              onClick={handleClearFilters}
+            >
+              Show All 60 Challenges
             </button>
           </div>
         ) : (
-          <div className="challenges-grid">
-            {visibleChallenges.map((c) => {
-              const isOpen = expandedCards.has(c.id);
-              const domainShort = DOMAIN_SHORT_NAMES[c.domain] || `Domain ${c.domain}`;
+          <div className="challenge-cards-feed">
+            {filteredChallenges.map((c) => {
+              const isCardOpen = viewMode === 'detailed' || expandedCards.has(c.id);
+              const domainName = DOMAIN_SHORT_NAMES[c.domain] || `Domain ${c.domain}`;
 
               return (
                 <article
                   key={c.id}
-                  className={`challenge-card ${isOpen ? 'challenge-card--expanded' : ''}`}
+                  className={`challenge-feed-card ${isCardOpen ? 'is-expanded' : ''}`}
+                  id={c.id.toLowerCase()}
                 >
-                  <div
-                    className="challenge-card-header"
-                    onClick={() => toggleCard(c.id)}
-                    role="button"
-                    tabIndex={0}
-                    aria-expanded={isOpen}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        toggleCard(c.id);
-                      }
-                    }}
-                  >
-                    <div className="challenge-card-meta">
-                      <div className="challenge-domain-tag">
-                        <span className="domain-num-badge">D0{c.domain}</span>
-                        <span className="domain-text">{domainShort}</span>
-                      </div>
-                      <div className="challenge-meta-right">
-                        <span className="challenge-id-badge">{c.id}</span>
-                        <span className="challenge-expand-indicator" aria-hidden="true">
-                          <svg
-                            className={`chevron-icon ${isOpen ? 'rotated' : ''}`}
-                            width="16"
-                            height="16"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2.5"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          >
-                            <polyline points="6 9 12 15 18 9" />
-                          </svg>
-                        </span>
-                      </div>
+                  {/* Card Header Strip */}
+                  <div className="feed-card-header">
+                    <div className="feed-card-tags">
+                      <span className="feed-id-badge">{c.id}</span>
+                      <span className="feed-domain-badge">
+                        Domain {c.domain} · {domainName}
+                      </span>
                     </div>
 
-                    <h3 className="challenge-card-title">{c.title}</h3>
-
-                    {!isOpen && (
-                      <div className="challenge-quick-preview">
-                        <span className="preview-chip forensic-chip">
-                          <span className="chip-dot" /> Forensic Science
-                        </span>
-                        <span className="preview-chip tech-chip">
-                          <span className="chip-dot" /> Tech &amp; Engineering
-                        </span>
-                        <span className="preview-hint">Click to expand roles ↓</span>
-                      </div>
-                    )}
+                    <div className="feed-card-header-actions">
+                      <Link
+                        to={`/registration?challenge=${c.id}`}
+                        className="feed-card-register-btn"
+                        title={`Select ${c.id} and proceed to registration`}
+                      >
+                        Register with {c.id} →
+                      </Link>
+                    </div>
                   </div>
 
-                  {isOpen && (
-                    <div className="challenge-card-body">
-                      <div className="role-pillars">
-                        <div className="role-pillar role-pillar--forensic">
-                          <div className="pillar-header">
-                            <span className="pillar-icon" aria-hidden="true">
-                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M4.5 3h15" />
-                                <path d="M6 3v5l-3.5 9A3 3 0 0 0 5.3 21h13.4a3 3 0 0 0 2.8-4l-3.5-9V3" />
-                                <path d="M6 14h12" />
-                              </svg>
-                            </span>
-                            <h4>FORENSIC SCIENCE ROLE</h4>
-                          </div>
-                          <p>{c.forensic}</p>
-                        </div>
+                  {/* Card Title */}
+                  <h3 className="feed-card-title">{c.title}</h3>
 
-                        <div className="role-pillar role-pillar--tech">
-                          <div className="pillar-header">
-                            <span className="pillar-icon" aria-hidden="true">
-                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                <polyline points="16 18 22 12 16 6" />
-                                <polyline points="8 6 2 12 8 18" />
-                              </svg>
-                            </span>
-                            <h4>TECHNICAL / ENGINEERING ROLE</h4>
-                          </div>
-                          <p>{c.technical}</p>
+                  {/* Dual Scopes: Forensic & Technical */}
+                  {isCardOpen ? (
+                    <div className="feed-card-scopes">
+                      {/* Forensic Science Scope */}
+                      <div className="scope-box scope-box--forensic">
+                        <div className="scope-box-header">
+                          <span className="scope-badge-icon" aria-hidden="true">🔬</span>
+                          <h4>FORENSIC SCIENCE SCOPE</h4>
                         </div>
+                        <p className="scope-box-text">{c.forensic}</p>
                       </div>
 
-                      <div className="challenge-card-footer">
-                        <span className="team-requirement-hint">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                            <circle cx="9" cy="7" r="4" />
-                          </svg>
-                          Team of 6: 2 Forensic + 2 Tech + 2 Open
-                        </span>
-
-                        <Link
-                          to={`/registration?challenge=${c.id}`}
-                          className="challenge-select-btn"
-                          title={`Register with challenge ${c.id}`}
-                        >
-                          Register with {c.id} <span>↗</span>
-                        </Link>
+                      {/* Technical & Engineering Scope */}
+                      <div className="scope-box scope-box--tech">
+                        <div className="scope-box-header">
+                          <span className="scope-badge-icon" aria-hidden="true">💻</span>
+                          <h4>TECHNICAL &amp; ENGINEERING SCOPE</h4>
+                        </div>
+                        <p className="scope-box-text">{c.technical}</p>
                       </div>
                     </div>
+                  ) : (
+                    <div className="feed-card-compact-summary">
+                      <div className="compact-scope-hints">
+                        <span className="scope-pill scope-pill--forensic">Forensic Science Role</span>
+                        <span className="scope-pill scope-pill--tech">Technical / Engineering Role</span>
+                      </div>
+                      <button
+                        type="button"
+                        className="feed-compact-toggle"
+                        onClick={() => toggleCard(c.id)}
+                      >
+                        Read Scopes ↓
+                      </button>
+                    </div>
                   )}
+
+                  {/* Card Footer */}
+                  <div className="feed-card-footer">
+                    <div className="feed-team-rule">
+                      <span className="team-rule-icon" aria-hidden="true">👥</span>
+                      <span>Squad of 6: 2 Forensic/CSDF + 2 Engineering + 2 Open Disciplines</span>
+                    </div>
+
+                    <div className="feed-footer-actions">
+                      {viewMode === 'compact' && isCardOpen && (
+                        <button
+                          type="button"
+                          className="feed-hide-toggle"
+                          onClick={() => toggleCard(c.id)}
+                        >
+                          Collapse Scopes ↑
+                        </button>
+                      )}
+                      <Link
+                        to={`/registration?challenge=${c.id}`}
+                        className="feed-footer-link"
+                      >
+                        Lock in this challenge ↗
+                      </Link>
+                    </div>
+                  </div>
                 </article>
               );
             })}
           </div>
         )}
 
-        {/* Pagination */}
-        <div className="pagination">
-          <button
-            id="previous"
-            type="button"
-            onClick={() => handlePageChange(currentPage - 1)}
-            disabled={currentPage <= 1}
-          >
-            ← Previous
-          </button>
-          <span id="page-state" aria-live="polite">
-            Page {currentPage} of {totalPages}
-          </span>
-          <button
-            id="next"
-            type="button"
-            onClick={() => handlePageChange(currentPage + 1)}
-            disabled={currentPage >= totalPages}
-          >
-            Next →
-          </button>
-        </div>
-
-        {/* Download catalogue note */}
-        <div style={{ marginTop: '30px' }}>
-          <div className="catalogue-download-card">
-            <div className="download-card-content">
-              <h4>Download the complete problem catalogue</h4>
-              <p>Get the official FORENSITHON Challenge Catalogue DOCX with all 60 statements, judging rubrics, and rules.</p>
-            </div>
-            <a
-              href={`${import.meta.env.BASE_URL}FORENSITHON-Challenge-Catalogue.docx`}
-              className="button secondary"
-              download
-            >
-              Download DOCX <span>↓</span>
-            </a>
+        {/* Official Catalogue Download Banner */}
+        <section className="catalogue-download-banner">
+          <div className="download-banner-info">
+            <h3>Download Official Problem Statement Guide</h3>
+            <p>Get the complete Forensithon 2k26 Challenge Catalogue DOCX with all 60 case files, problem descriptions, and judging rubrics.</p>
           </div>
-        </div>
-      </section>
+          <a
+            href={`${import.meta.env.BASE_URL}FORENSITHON-Challenge-Catalogue.docx`}
+            className="button secondary"
+            download
+          >
+            Download DOCX <span>↓</span>
+          </a>
+        </section>
+      </div>
     </main>
   );
 }
