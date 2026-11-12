@@ -1,6 +1,18 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { eventData } from '../data/eventData';
+import {
+  fetchForensithonCatalog,
+  fetchStudentByRollNumber,
+  getStoredTeamLeader,
+  clearStoredTeamLeader,
+  refreshLoggedInStudent,
+  registerTeamLeaderAccount,
+  loginTeamLeaderAccount,
+  fetchTeamLeaderState,
+  saveTeamMembersDraft,
+  createForensithonOrder,
+  verifyForensithonPayment
+} from '../services/api';
 
 const FORENSIC_BRANCH_OPTIONS = [
   'B.Sc Forensic Science',
@@ -41,83 +53,11 @@ const REGISTRATION_AMOUNT = Number(
   300
 );
 
-// ECAP Student Data API Key
-const ECAP_API_KEY = '4T4K65HWxqKD90AEZoCZLqA+m3nq6JvwDRDHIJUBFc4=';
-
 /**
- * Fetch Student Details from ECAP API (with proxy and fallbacks)
+ * Fetch Student Details from Unified Backend (ECAP + DB fallbacks)
  */
 const fetchStudentDetailsFromApi = async (rollNo) => {
-  if (!rollNo || !rollNo.trim()) return null;
-  const cleanRoll = rollNo.trim().toUpperCase();
-
-  // Strategy 1: Local Vite Proxy to https://info.aec.edu.in (CORS-free in dev & preview)
-  const proxyEndpoints = [
-    `/adityaapi/api/studentdata/${encodeURIComponent(cleanRoll)}`,
-    `/forensithon/adityaapi/api/studentdata/${encodeURIComponent(cleanRoll)}`
-  ];
-  for (const url of proxyEndpoints) {
-    try {
-      const res = await fetch(url, {
-        headers: {
-          'Accept': 'application/json',
-          'x-api-key': ECAP_API_KEY,
-          'X-API-Key': ECAP_API_KEY
-        }
-      });
-      if (res.ok) {
-        const json = await res.json();
-        const list = Array.isArray(json) ? json : (json ? [json] : []);
-        if (list.length > 0 && !list[0].error && (list[0].studentname || list[0].studentName || list[0].name)) {
-          return list[0];
-        }
-      }
-    } catch (e1) {
-      // try next endpoint
-    }
-  }
-
-  // Strategy 2: Direct ECAP endpoint with API Key
-  try {
-    const directUrl = `https://info.aec.edu.in/adityaapi/api/studentdata/${encodeURIComponent(cleanRoll)}`;
-    const res = await fetch(directUrl, {
-      headers: {
-        'Accept': 'application/json',
-        'x-api-key': ECAP_API_KEY,
-        'X-API-Key': ECAP_API_KEY
-      }
-    });
-    if (res.ok) {
-      const json = await res.json();
-      const list = Array.isArray(json) ? json : (json ? [json] : []);
-      if (list.length > 0 && !list[0].error && (list[0].studentname || list[0].studentName || list[0].name)) {
-        return list[0];
-      }
-    }
-  } catch (e2) {
-    // continue to next strategy
-  }
-
-  // Strategy 3: Unified Backend endpoint if running
-  try {
-    const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:9022';
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 1200);
-    const res = await fetch(`${backendUrl}/api/forensithon/student/${encodeURIComponent(cleanRoll)}`, {
-      signal: controller.signal
-    });
-    clearTimeout(timer);
-    if (res.ok) {
-      const json = await res.json();
-      if (json.success && json.data) {
-        return json.data;
-      }
-    }
-  } catch (e3) {
-    // ignore
-  }
-
-  return null;
+  return fetchStudentByRollNumber(rollNo);
 };
 
 /**
@@ -157,8 +97,8 @@ const mapSemesterToYear = (semesterName, joinedBatch, courseName) => {
  * Smart mapping from ECAP branch to tier dropdown options
  */
 const mapStudentBranch = (tier, rawBranch, rawCourse) => {
-  const b = (rawBranch || '').toLowerCase();
-  const c = (rawCourse || '').toLowerCase();
+  const b = (rawBranch || '').trim().toLowerCase();
+  const c = (rawCourse || '').trim().toLowerCase();
 
   if (tier === 'forensic') {
     if (c.includes('m.sc') || b.includes('m.sc')) {
@@ -167,48 +107,48 @@ const mapStudentBranch = (tier, rawBranch, rawCourse) => {
     if (b.includes('csdf') || b.includes('cyber') || b.includes('digital forensic')) {
       return 'B.Tech CSDF (Computer Science & Digital Forensics)';
     }
-    if (b.includes('forensic')) {
+    if (b.includes('forensic') || b === 'fs' || b === 'cfs') {
       return 'B.Sc Forensic Science';
     }
     return 'B.Sc Forensic Science';
   }
 
   if (tier === 'engineering') {
-    if (b.includes('ai') || b.includes('aiml') || b.includes('machine learning')) {
+    if (b === 'aiml' || b.includes('ai') || b.includes('aiml') || b.includes('machine learning')) {
       return 'Artificial Intelligence & Machine Learning (AIML)';
     }
-    if (b.includes('data science') || b.includes('ds')) {
+    if (b === 'ds' || b.includes('data science') || b.includes('cse-ds')) {
       return 'Data Science';
     }
-    if (b.includes('it') || b.includes('information tech')) {
+    if (b === 'it' || b.includes('information tech')) {
       return 'Information Technology (IT)';
     }
-    if (b.includes('ece') || b.includes('electronics')) {
+    if (b === 'ece' || b.includes('electronics and comm') || b.includes('electronics & comm')) {
       return 'Electronics & Communication Engineering (ECE)';
     }
-    if (b.includes('eee') || b.includes('electrical')) {
+    if (b === 'eee' || b.includes('electrical')) {
       return 'Electrical & Electronics Engineering (EEE)';
     }
-    if (b.includes('mech')) {
+    if (b === 'me' || b === 'mec' || b.includes('mech')) {
       return 'Mechanical Engineering';
     }
-    if (b.includes('civil')) {
+    if (b === 'ce' || b === 'civ' || b.includes('civil')) {
       return 'Civil Engineering';
     }
-    if (b.includes('petro') || b.includes('chem')) {
+    if (b === 'pt' || b.includes('petro') || b.includes('chem')) {
       return 'Petroleum / Chemical Engineering';
     }
-    if (b.includes('cse') || b.includes('computer')) {
+    if (b === 'cse' || b === 'cs' || b.includes('computer')) {
       return 'Computer Science & Engineering (CSE)';
     }
     return 'Computer Science & Engineering (CSE)';
   }
 
   if (tier === 'open') {
-    if (c.includes('management') || c.includes('bba') || c.includes('mba') || b.includes('mba') || b.includes('bba')) {
+    if (c.includes('management') || c.includes('bba') || c.includes('mba') || b.includes('mba') || b.includes('bba') || b === 'sob') {
       return 'School of Management Studies (BBA / MBA)';
     }
-    if (c.includes('pharm') || b.includes('pharm')) {
+    if (c.includes('pharm') || b.includes('pharm') || b === 'sop') {
       return 'School of Pharmacy (B.Pharm / M.Pharm)';
     }
     if (b.includes('bio') || b.includes('micro') || b.includes('chem') || c.includes('science')) {
@@ -217,10 +157,10 @@ const mapStudentBranch = (tier, rawBranch, rawCourse) => {
     if (b.includes('humanities') || b.includes('arts') || b.includes('english')) {
       return 'Humanities, Social Sciences & Languages';
     }
-    if (b.includes('forensic') || b.includes('csdf')) {
+    if (b.includes('forensic') || b.includes('csdf') || b === 'fs' || b === 'cfs') {
       return 'Forensic Science / CSDF';
     }
-    if (c.includes('b.tech') || b.includes('cse') || b.includes('ece') || b.includes('it') || b.includes('mech') || b.includes('civil')) {
+    if (c.includes('b.tech') || ['cse', 'ece', 'eee', 'it', 'me', 'mec', 'ce', 'civ', 'aiml', 'ds'].includes(b) || b.includes('mech') || b.includes('civil')) {
       return 'Engineering & Technology (Any Branch)';
     }
     return 'School of Management Studies (BBA / MBA)';
@@ -313,6 +253,26 @@ const createInitialMembers = () => [
   }
 ];
 
+const isMemberComplete = (m) => {
+  if (!m) return false;
+  const roll = String(m.rollNo || '').trim();
+  const name = String(m.name || '').trim();
+  const email = String(m.email || '').trim();
+  return Boolean(roll && name && email && email.includes('@'));
+};
+
+const createInitialRegisterForm = () => ({
+  teamName: '',
+  rollNo: '',
+  name: '',
+  email: '',
+  mobile: '',
+  branch: FORENSIC_BRANCH_OPTIONS[0],
+  year: '3rd Year',
+  gender: 'Other',
+  password: ''
+});
+
 // Helper to ensure Razorpay checkout script is loaded
 const loadRazorpayScript = () => {
   return new Promise((resolve) => {
@@ -332,11 +292,27 @@ export default function RegistrationPage() {
   const [searchParams] = useSearchParams();
   const initialChallengeId = searchParams.get('challenge');
 
-  const [selectedDomain, setSelectedDomain] = useState(1);
-  const [selectedChallengeId, setSelectedChallengeId] = useState('DF-01');
+  const [catalog, setCatalog] = useState({ domains: [], challenges: [] });
+  const [catalogLoading, setCatalogLoading] = useState(true);
+  const [catalogError, setCatalogError] = useState('');
+
+  // Team Leader 2-Tab Auth State (Register -> central_event_student_account, Login)
+  const [loggedInLeader, setLoggedInLeader] = useState(() => getStoredTeamLeader());
+  const [authMode, setAuthMode] = useState('register'); // 'register' | 'login'
+  const [registerForm, setRegisterForm] = useState(createInitialRegisterForm);
+  const [loginForm, setLoginForm] = useState({ identifier: '', password: '' });
+  const [showAuthPassword, setShowAuthPassword] = useState(false);
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState('');
+  const [authSuccess, setAuthSuccess] = useState('');
+  const [authLookupStatus, setAuthLookupStatus] = useState({ status: 'idle', message: '', studentName: '' });
+  const authLookupTimerRef = useRef(null);
+
+  const [selectedDomain, setSelectedDomain] = useState('');
+  const [selectedChallengeId, setSelectedChallengeId] = useState('');
   const [teamName, setTeamName] = useState('');
   const [members, setMembers] = useState(createInitialMembers);
-  const [confirmedCount, setConfirmedCount] = useState(0); // how many members confirmed (0 to 6)
+  const [confirmedCount, setConfirmedCount] = useState(() => (getStoredTeamLeader() ? 1 : 0)); // 0..6
   const [editingIdx, setEditingIdx] = useState(null); // which confirmed member is currently open for in-place editing
   const [agreed, setAgreed] = useState(false);
   const [validationErrors, setValidationErrors] = useState({});
@@ -344,17 +320,222 @@ export default function RegistrationPage() {
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [paymentErrorMessage, setPaymentErrorMessage] = useState('');
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [saveNotice, setSaveNotice] = useState('');
+  const [saveError, setSaveError] = useState('');
 
   // Lookup statuses per member index (0 to 5)
   const [lookupStatuses, setLookupStatuses] = useState(() =>
     Array(6).fill({ status: 'idle', studentName: '', message: '' })
   );
   const lookupTimeouts = useRef({});
+  const lastFetchedRollRef = useRef({});
+  const initialSyncDoneRef = useRef(false);
 
-  // Real-time student lookup from ECAP API by Roll Number
-  const triggerStudentLookup = async (index, rollToLookup) => {
+  const buildMembersWithLeader = useCallback((student, savedReg = null) => {
+    const base = createInitialMembers();
+    const leadSource = savedReg?.teamLead || student || {};
+    base[0] = {
+      ...base[0],
+      rollNo: String(leadSource.rollNo || leadSource.rollNumber || leadSource.roll || student?.roll || '').trim().toUpperCase(),
+      name: String(leadSource.name || student?.name || '').trim(),
+      email: String(leadSource.email || student?.email || '').trim().toLowerCase(),
+      phone: String(leadSource.phone || leadSource.mobile || student?.mobile || '').trim(),
+      branch: leadSource.branch || student?.department || base[0].branch,
+      year: leadSource.year || student?.year || base[0].year
+    };
+
+    const remainingList = Array.isArray(savedReg?.teamMembers) && savedReg.teamMembers.length > 0
+      ? savedReg.teamMembers
+      : Array.isArray(savedReg?.participants)
+      ? savedReg.participants.slice(1, 6)
+      : [];
+
+    let consecutiveConfirmed = isMemberComplete(base[0]) ? 1 : 0;
+    for (let i = 0; i < 5; i += 1) {
+      const slot = remainingList[i];
+      if (slot) {
+        base[i + 1] = {
+          ...base[i + 1],
+          rollNo: String(slot.rollNo || slot.rollNumber || slot.roll || '').trim().toUpperCase(),
+          name: String(slot.name || slot.studentName || '').trim(),
+          email: String(slot.email || '').trim().toLowerCase(),
+          phone: String(slot.phone || slot.mobile || '').trim(),
+          branch: slot.branch || slot.department || base[i + 1].branch,
+          year: slot.year || base[i + 1].year
+        };
+      }
+      if (consecutiveConfirmed === i + 1 && isMemberComplete(base[i + 1])) {
+        consecutiveConfirmed += 1;
+      }
+    }
+
+    return { nextMembers: base, nextConfirmedCount: Math.max(1, consecutiveConfirmed) };
+  }, []);
+
+  const applyServerState = useCallback(
+    (student, state, keepQueryChallenge = false) => {
+      const reg = state?.registration || null;
+      const pay = state?.payment || null;
+      const resolvedTeamName = String(reg?.teamName || student?.teamName || '').trim();
+      if (resolvedTeamName) {
+        setTeamName(resolvedTeamName);
+      }
+
+      const { nextMembers, nextConfirmedCount } = buildMembersWithLeader(student, reg);
+      setMembers(nextMembers);
+      setConfirmedCount(nextConfirmedCount);
+
+      if (!keepQueryChallenge && reg) {
+        if (reg.domainCode) setSelectedDomain(String(reg.domainCode).toUpperCase());
+        if (reg.challengeId) setSelectedChallengeId(String(reg.challengeId));
+      }
+
+      const isPaid = Boolean(
+        reg?.payment?.status === 'PAID' ||
+          reg?.status === 'CONFIRMED' ||
+          reg?.status === 'PAID' ||
+          pay?.status === 'PAID'
+      );
+
+      if (isPaid && (reg || pay)) {
+        const paidAtDate = pay?.paidAt || reg?.paidAt || reg?.payment?.paidAt || reg?.updated_at;
+        const timestamp = paidAtDate
+          ? new Date(paidAtDate).toLocaleString('en-IN', {
+              day: 'numeric',
+              month: 'short',
+              year: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit'
+            })
+          : new Date().toLocaleString('en-IN');
+
+        setSubmittedData({
+          regId: reg?.registrationNumber || pay?.registrationNumber || 'CONFIRMED',
+          paymentReference: pay?.paymentReference || reg?.payment?.paymentReference || '',
+          timestamp,
+          teamName: resolvedTeamName || 'Registered Team',
+          domain: reg?.domainTitle || pay?.domainTitle || reg?.domainCode || 'Forensithon',
+          challengeId: reg?.challengeId || pay?.challengeId || '',
+          challengeTitle: reg?.challengeTitle || pay?.challengeTitle || reg?.eventTitle || '',
+          forensicRole: reg?.forensicScope || '',
+          technicalRole: reg?.technicalScope || '',
+          members: nextMembers,
+          razorpayOrderId: pay?.razorpay?.orderId || reg?.payment?.orderId || reg?.razorpayOrderId || '',
+          razorpayPaymentId: pay?.razorpay?.paymentId || reg?.payment?.paymentId || reg?.razorpayPaymentId || '',
+          amount: pay?.amount || reg?.payment?.amount || reg?.fee?.amount || REGISTRATION_AMOUNT,
+          status: 'PAID & CONFIRMED · VERIFIED VIA RAZORPAY'
+        });
+      }
+    },
+    [buildMembersWithLeader]
+  );
+
+  // Load dynamic categories & challenges from unified-backend
+  useEffect(() => {
+    let active = true;
+    setCatalogLoading(true);
+    setCatalogError('');
+    fetchForensithonCatalog()
+      .then((data) => {
+        if (!active) return;
+        const domains = Array.isArray(data.domains) ? data.domains : [];
+        const challenges = Array.isArray(data.challenges) ? data.challenges : [];
+        setCatalog({ domains, challenges });
+
+        if (initialChallengeId) {
+          const q = initialChallengeId.trim().toLowerCase();
+          const found = challenges.find(
+            (c) =>
+              String(c.id || '').toLowerCase() === q ||
+              String(c.slug || '').toLowerCase() === q ||
+              String(c._id || '').toLowerCase() === q
+          );
+          if (found) {
+            setSelectedDomain(found.categoryCode);
+            setSelectedChallengeId(found.id);
+            return;
+          }
+        }
+
+        const firstWithChallenge = domains.find((d) => d.challenges && d.challenges.length > 0) || domains[0];
+        if (firstWithChallenge) {
+          setSelectedDomain((prev) => prev || firstWithChallenge.code);
+          if (firstWithChallenge.challenges && firstWithChallenge.challenges.length > 0) {
+            setSelectedChallengeId((prev) => prev || firstWithChallenge.challenges[0].id);
+          } else {
+            setSelectedChallengeId('');
+          }
+        }
+      })
+      .catch((err) => {
+        if (!active) return;
+        console.error('Failed to load Forensithon challenges for registration:', err);
+        setCatalogError(err.message || 'Unable to load challenges from server.');
+      })
+      .finally(() => {
+        if (active) setCatalogLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [initialChallengeId]);
+
+  // Restore & validate saved JWT token + Team Leader state across sessions/days
+  useEffect(() => {
+    const onAuthChanged = () => {
+      const current = getStoredTeamLeader();
+      if (!current && loggedInLeader) {
+        initialSyncDoneRef.current = false;
+        setLoggedInLeader(null);
+        setSubmittedData(null);
+        setTeamName('');
+        setMembers(createInitialMembers());
+        setConfirmedCount(0);
+        setEditingIdx(null);
+      }
+    };
+    window.addEventListener('forensithon-auth-changed', onAuthChanged);
+    return () => window.removeEventListener('forensithon-auth-changed', onAuthChanged);
+  }, [loggedInLeader]);
+
+  useEffect(() => {
+    if (!loggedInLeader || initialSyncDoneRef.current) return;
+    initialSyncDoneRef.current = true;
+    let active = true;
+
+    applyServerState(loggedInLeader, null, Boolean(initialChallengeId));
+    refreshLoggedInStudent()
+      .then(async (verifiedStudent) => {
+        if (!active) return;
+        if (!verifiedStudent) {
+          handleLogout();
+          return;
+        }
+        setLoggedInLeader(verifiedStudent);
+        const state = await fetchTeamLeaderState(verifiedStudent.roll).catch(() => null);
+        if (active && state) {
+          applyServerState(state.account || verifiedStudent, state, Boolean(initialChallengeId));
+        }
+      })
+      .catch((err) => {
+        console.warn('Could not sync Team Leader session:', err);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [loggedInLeader, applyServerState, initialChallengeId]);
+
+  // Real-time student lookup from Unified Backend / ECAP API by Roll Number
+  const triggerStudentLookup = async (index, rollToLookup, force = false) => {
     const cleanRoll = (rollToLookup || '').trim().toUpperCase();
     if (!cleanRoll || cleanRoll.length < 5) return;
+
+    if (!force && lastFetchedRollRef.current[index] === cleanRoll && lookupStatuses[index]?.status === 'found') {
+      return;
+    }
 
     setLookupStatuses((prev) => {
       const copy = [...prev];
@@ -366,13 +547,14 @@ export default function RegistrationPage() {
       const student = await fetchStudentDetailsFromApi(cleanRoll);
 
       if (student && !student.error && (student.studentname || student.studentName || student.name)) {
+        lastFetchedRollRef.current[index] = cleanRoll;
         const studentName = (student.studentname || student.studentName || student.name || '').trim();
-        const phone = (student.mobilenumber || student.MobileNumber || student.phone || '').trim();
+        const phone = (student.mobilenumber || student.MobileNumber || student.mobile || student.phone || student.fathermobilenumber || '').trim();
         const rawEmail = (student.emailid || student.email || student.Email || student.EmailId || '').trim();
 
         const tier = members[index]?.tier || 'forensic';
-        const mappedYear = mapSemesterToYear(student.semestername, student.joinedbatch, student.coursename);
-        const mappedBranch = mapStudentBranch(tier, student.branch, student.coursename);
+        const mappedYear = mapSemesterToYear(student.semestername || student.semester || student.year, student.joinedbatch, student.coursename);
+        const mappedBranch = mapStudentBranch(tier, student.branch || student.department, student.coursename);
 
         setMembers((prev) => {
           const copy = [...prev];
@@ -410,7 +592,7 @@ export default function RegistrationPage() {
       } else {
         setLookupStatuses((prev) => {
           const copy = [...prev];
-          copy[index] = { status: 'not_found', studentName: '', message: 'Manual entry available' };
+          copy[index] = { status: 'not_found', studentName: '', message: 'Not found — enter manually' };
           return copy;
         });
       }
@@ -418,52 +600,272 @@ export default function RegistrationPage() {
       console.warn('Student lookup failed:', err);
       setLookupStatuses((prev) => {
         const copy = [...prev];
-        copy[index] = { status: 'not_found', studentName: '', message: 'Lookup error' };
+        copy[index] = { status: 'not_found', studentName: '', message: 'Manual entry available' };
         return copy;
       });
     }
   };
 
-  // If a challenge query parameter is provided in URL, pre-select that challenge and its domain
-  useEffect(() => {
-    if (initialChallengeId) {
-      const found = eventData.challenges.find(
-        (c) => c.id.toUpperCase() === initialChallengeId.toUpperCase()
-      );
-      if (found) {
-        setSelectedDomain(found.domain);
-        setSelectedChallengeId(found.id);
-      }
-    }
-  }, [initialChallengeId]);
-
   // Available challenges in the selected domain
   const domainChallenges = useMemo(() => {
-    return eventData.challenges.filter((c) => c.domain === Number(selectedDomain));
-  }, [selectedDomain]);
+    if (!selectedDomain) return [];
+    return catalog.challenges.filter(
+      (c) => String(c.categoryCode).toUpperCase() === String(selectedDomain).toUpperCase()
+    );
+  }, [catalog.challenges, selectedDomain]);
 
   // When domain changes, ensure selected challenge belongs to the domain
-  const handleDomainChange = (domainNum) => {
-    const num = Number(domainNum);
-    setSelectedDomain(num);
-    const challengesForDomain = eventData.challenges.filter((c) => c.domain === num);
+  const handleDomainChange = (domainCode) => {
+    const code = String(domainCode);
+    setSelectedDomain(code);
+    const challengesForDomain = catalog.challenges.filter(
+      (c) => String(c.categoryCode).toUpperCase() === code.toUpperCase()
+    );
     if (challengesForDomain.length > 0) {
       setSelectedChallengeId(challengesForDomain[0].id);
+    } else {
+      setSelectedChallengeId('');
     }
   };
 
   // Currently selected challenge details
   const currentChallenge = useMemo(() => {
     return (
-      eventData.challenges.find((c) => c.id === selectedChallengeId) ||
+      catalog.challenges.find((c) => c.id === selectedChallengeId) ||
       domainChallenges[0] ||
-      eventData.challenges[0]
+      null
     );
-  }, [selectedChallengeId, domainChallenges]);
+  }, [catalog.challenges, selectedChallengeId, domainChallenges]);
 
   const currentDomainInfo = useMemo(() => {
-    return eventData.domains.find((d) => Number(d.number) === Number(selectedDomain));
-  }, [selectedDomain]);
+    return (
+      catalog.domains.find(
+        (d) => String(d.code).toUpperCase() === String(selectedDomain).toUpperCase()
+      ) || null
+    );
+  }, [catalog.domains, selectedDomain]);
+
+  const effectiveFeeAmount = useMemo(() => {
+    if (currentChallenge?.feeRupees && currentChallenge.feeRupees > 0) {
+      return currentChallenge.feeRupees;
+    }
+    return REGISTRATION_AMOUNT;
+  }, [currentChallenge]);
+
+  // Strict Remaining 5 Team Members Gate (Members 2..6 must all be filled & confirmed)
+  const remainingFilledCount = useMemo(() => {
+    return members
+      .slice(1, 6)
+      .filter((m, offset) => offset + 1 < confirmedCount && isMemberComplete(m)).length;
+  }, [members, confirmedCount]);
+
+  const allRemainingFiveFilled = Boolean(
+    remainingFilledCount === 5 && confirmedCount === 6 && editingIdx === null
+  );
+
+  const isLeadReady = Boolean(
+    confirmedCount >= 1 && isMemberComplete(members[0]) && String(members[0]?.phone || '').trim()
+  );
+
+  // Team Leader Roll No Auto-Fill in Register Tab
+  const triggerAuthRollLookup = async (rollInput) => {
+    const cleanRoll = (rollInput || '').trim().toUpperCase();
+    if (!cleanRoll || cleanRoll.length < 5) return;
+    setAuthLookupStatus({ status: 'loading', message: 'Fetching student...', studentName: '' });
+    try {
+      const student = await fetchStudentDetailsFromApi(cleanRoll);
+      if (student && !student.error && (student.studentname || student.studentName || student.name)) {
+        const studentName = (student.studentname || student.studentName || student.name || '').trim();
+        const phone = (student.mobilenumber || student.MobileNumber || student.mobile || student.phone || student.fathermobilenumber || '').trim();
+        const rawEmail = (student.emailid || student.email || student.Email || student.EmailId || '').trim().toLowerCase();
+        const mappedYear = mapSemesterToYear(student.semestername || student.semester || student.year, student.joinedbatch, student.coursename);
+        const mappedBranch = mapStudentBranch('forensic', student.branch || student.department, student.coursename);
+
+        setRegisterForm((prev) => ({
+          ...prev,
+          name: studentName || prev.name,
+          email: rawEmail || prev.email,
+          mobile: phone || prev.mobile,
+          branch: mappedBranch || prev.branch,
+          year: mappedYear || prev.year,
+          gender: student.gender || prev.gender
+        }));
+        setAuthLookupStatus({ status: 'found', studentName, message: `✓ ${studentName}` });
+      } else {
+        setAuthLookupStatus({ status: 'not_found', studentName: '', message: 'Not found — enter manually' });
+      }
+    } catch {
+      setAuthLookupStatus({ status: 'not_found', studentName: '', message: 'Manual entry available' });
+    }
+  };
+
+  const handleRegisterRollChange = (val) => {
+    const upper = val.toUpperCase();
+    setRegisterForm((prev) => ({ ...prev, rollNo: upper }));
+    if (authLookupTimerRef.current) clearTimeout(authLookupTimerRef.current);
+    if (upper.trim().length >= 6) {
+      authLookupTimerRef.current = setTimeout(() => {
+        triggerAuthRollLookup(upper);
+      }, 350);
+    } else {
+      setAuthLookupStatus({ status: 'idle', message: '', studentName: '' });
+    }
+  };
+
+  const handleTeamLeaderRegister = async (e) => {
+    e.preventDefault();
+    setAuthError('');
+    setAuthSuccess('');
+
+    const tName = registerForm.teamName.trim();
+    const rNo = registerForm.rollNo.trim().toUpperCase();
+    const fullName = registerForm.name.trim();
+    const emailVal = registerForm.email.trim().toLowerCase();
+    const mobileVal = registerForm.mobile.trim();
+    const passwordVal = registerForm.password;
+
+    if (!tName) return setAuthError('Team Name is required to register as Team Leader.');
+    if (!rNo) return setAuthError('Team Leader Roll Number is required.');
+    if (!fullName) return setAuthError('Team Leader Full Name is required.');
+    if (!emailVal || !emailVal.includes('@')) return setAuthError('Please enter a valid Email ID.');
+    if (!mobileVal) return setAuthError('Mobile number is required for the Team Leader.');
+    if (!passwordVal || passwordVal.length < 4) return setAuthError('Please create a password (at least 4 characters).');
+
+    setAuthLoading(true);
+    try {
+      const student = await registerTeamLeaderAccount({
+        teamName: tName,
+        roll: rNo,
+        name: fullName,
+        email: emailVal,
+        mobile: mobileVal,
+        department: registerForm.branch,
+        year: registerForm.year,
+        gender: registerForm.gender || 'Other',
+        college: 'Aditya University',
+        password: passwordVal
+      });
+
+      // After registering as Team Leader, redirect to Login tab so they sign in with their credentials
+      setAuthMode('login');
+      setLoginForm({ identifier: student?.roll || rNo, password: '' });
+      setRegisterForm(createInitialRegisterForm());
+      setAuthLookupStatus({ status: 'idle', message: '', studentName: '' });
+      setAuthSuccess(
+        `Team "${student?.teamName || tName}" registered in central_event_student_account! Please login below with ${student?.roll || rNo} and your password to add the remaining 5 team members.`
+      );
+    } catch (err) {
+      setAuthError(err.message || 'Unable to register Team Leader.');
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleTeamLeaderLogin = async (e) => {
+    e.preventDefault();
+    setAuthError('');
+    setAuthSuccess('');
+
+    const idVal = loginForm.identifier.trim();
+    const pwVal = loginForm.password;
+    if (!idVal) return setAuthError('Please enter your Roll Number or Email ID.');
+    if (!pwVal) return setAuthError('Please enter your password.');
+
+    setAuthLoading(true);
+    try {
+      const { student } = await loginTeamLeaderAccount({ email: idVal, password: pwVal });
+      initialSyncDoneRef.current = true;
+      setLoggedInLeader(student);
+      const serverState = await fetchTeamLeaderState(student.roll).catch(() => null);
+      applyServerState(student, serverState, Boolean(initialChallengeId));
+      setSaveNotice(
+        serverState?.registration
+          ? 'Welcome back! Your previously saved team details have been restored.'
+          : ''
+      );
+      setSaveError('');
+    } catch (err) {
+      setAuthError(err.message || 'Invalid credentials.');
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleLogout = () => {
+    clearStoredTeamLeader();
+    initialSyncDoneRef.current = false;
+    setLoggedInLeader(null);
+    setSubmittedData(null);
+    setAuthMode('login');
+    setAuthError('');
+    setAuthSuccess('');
+    setTeamName('');
+    setAgreed(false);
+    setValidationErrors({});
+    setIsProcessingPayment(false);
+    setPaymentErrorMessage('');
+    setSaveNotice('');
+    setSaveError('');
+    setMembers(createInitialMembers());
+    setConfirmedCount(0);
+    setEditingIdx(null);
+    lastFetchedRollRef.current = {};
+    setLookupStatuses(Array(6).fill({ status: 'idle', studentName: '', message: '' }));
+  };
+
+  // Persist Team Name + Team Leader + Remaining 5 Members to central_event_student_registrations
+  const persistTeamDraft = async (nextMembersList = members, overrideTeamName = teamName) => {
+    if (!loggedInLeader) return;
+    const cleanTeamName = (overrideTeamName || loggedInLeader.teamName || '').trim();
+    if (!cleanTeamName) {
+      setSaveError('Enter a Team Name in Step 01 before saving team members.');
+      return;
+    }
+
+    setSavingDraft(true);
+    setSaveError('');
+    setSaveNotice('');
+    try {
+      const domainNumber = Number(currentDomainInfo?.number) || 1;
+      const domainLabel = currentDomainInfo?.name || currentDomainInfo?.title || selectedDomain || 'Forensithon';
+
+      const result = await saveTeamMembersDraft({
+        teamName: cleanTeamName,
+        domainId: domainNumber,
+        domainCode: currentDomainInfo?.code || selectedDomain || '',
+        domainTitle: domainLabel,
+        challengeId: currentChallenge?.id || selectedChallengeId || '',
+        challengeTitle: currentChallenge?.title || '',
+        centralEventId: currentChallenge?.sourceType === 'central_event' ? currentChallenge?._id : null,
+        forensicScope: currentChallenge?.forensic || currentChallenge?.descriptionText || '',
+        technicalScope: currentChallenge?.technical || '',
+        subFields: Array.isArray(currentChallenge?.subFields) ? currentChallenge.subFields : [],
+        amount: effectiveFeeAmount,
+        members: nextMembersList.map((m, idx) => ({
+          studentIndex: idx + 1,
+          tier: m.tier,
+          tierTitle: m.tierTitle,
+          role: m.role,
+          isLead: idx === 0,
+          name: (m.name || '').trim(),
+          rollNo: (m.rollNo || '').trim().toUpperCase(),
+          email: (m.email || '').trim().toLowerCase(),
+          branch: m.branch,
+          year: m.year,
+          phone: m.phone ? m.phone.trim() : ''
+        }))
+      });
+
+      const savedCount = Number(result?.completedMembersCount ?? nextMembersList.slice(1, 6).filter(isMemberComplete).length);
+      setSaveNotice(
+        `Saved in central_event_student_registrations (${savedCount}/5 remaining members completed).`
+      );
+    } catch (err) {
+      setSaveError(err.message || 'Unable to save team progress.');
+    } finally {
+      setSavingDraft(false);
+    }
+  };
 
   const handleMemberChange = (index, field, value) => {
     setMembers((prev) => {
@@ -474,6 +876,7 @@ export default function RegistrationPage() {
 
     // Auto-trigger API lookup when Roll Number is typed
     if (field === 'rollNo') {
+      lastFetchedRollRef.current[index] = '';
       const cleanRoll = value.trim().toUpperCase();
       if (lookupTimeouts.current[index]) {
         clearTimeout(lookupTimeouts.current[index]);
@@ -482,7 +885,7 @@ export default function RegistrationPage() {
         lookupTimeouts.current[index] = setTimeout(() => {
           triggerStudentLookup(index, cleanRoll);
         }, 350);
-      } else if (cleanRoll.length === 0) {
+      } else {
         setLookupStatuses((prev) => {
           const copy = [...prev];
           copy[index] = { status: 'idle', studentName: '', message: '' };
@@ -508,11 +911,11 @@ export default function RegistrationPage() {
       errors.teamName = 'Team name is required.';
     }
 
-    if (!selectedChallengeId) {
-      errors.challenge = 'Please select a problem statement.';
+    if (!selectedChallengeId || !currentChallenge) {
+      errors.challenge = 'Please select an active track and problem statement.';
     }
 
-    // Validate 6 members (checking Roll Number first as primary identifier)
+    // Validate 6 members (Team Leader + remaining 5 members)
     members.forEach((m, idx) => {
       if (!m.rollNo.trim()) {
         errors[`member_${idx}_rollNo`] = `Roll number is required.`;
@@ -531,19 +934,29 @@ export default function RegistrationPage() {
       }
     });
 
+    if (!allRemainingFiveFilled) {
+      errors.remainingMembers = 'Please complete all 5 remaining team members before proceeding to payment.';
+    }
+
     if (!agreed) {
       errors.agreed = 'You must confirm that all 6 members satisfy the university & branch rules.';
     }
 
     setValidationErrors(errors);
-    return Object.keys(errors).length === 0;
+    return errors;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!validateForm()) {
-      const firstErrorKey = Object.keys(validationErrors)[0];
+    if (!allRemainingFiveFilled) {
+      setPaymentErrorMessage('Payment is disabled until all 5 remaining team members are filled.');
+      return;
+    }
+
+    const errors = validateForm();
+    if (Object.keys(errors).length > 0) {
+      const firstErrorKey = Object.keys(errors)[0];
       const errorElement = document.querySelector(`[data-error-key="${firstErrorKey}"]`);
       if (errorElement) {
         errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -561,49 +974,43 @@ export default function RegistrationPage() {
         throw new Error('Razorpay SDK failed to load. Please check your internet connection.');
       }
 
-      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:9022';
+      const domainNumber = Number(currentDomainInfo?.number) || 1;
+      const domainLabel = currentDomainInfo?.name || currentDomainInfo?.title || selectedDomain || 'Forensithon';
 
-      // 2. Call Backend API to Create Order and register in event_forensithon_registrations
+      // 2. Call Unified Backend API to Create Order and save registration in central_event_student_registrations
       const orderPayload = {
-        amount: REGISTRATION_AMOUNT,
+        amount: effectiveFeeAmount,
         teamName: teamName.trim(),
-        domainId: Number(selectedDomain),
-        domainTitle: currentDomainInfo?.title || `Domain 0${selectedDomain}`,
+        domainId: domainNumber,
+        domainCode: currentDomainInfo?.code || selectedDomain || '',
+        domainTitle: domainLabel,
         challengeId: currentChallenge.id,
         challengeTitle: currentChallenge.title,
-        forensicScope: currentChallenge.forensic,
-        technicalScope: currentChallenge.technical,
+        centralEventId: currentChallenge?.sourceType === 'central_event' ? currentChallenge?._id : null,
+        forensicScope: currentChallenge.forensic || currentChallenge.descriptionText || currentChallenge.title,
+        technicalScope: currentChallenge.technical || '',
+        subFields: Array.isArray(currentChallenge.subFields) ? currentChallenge.subFields : [],
         members: members.map((m, idx) => ({
           studentIndex: idx + 1,
           tier: m.tier,
           tierTitle: m.tierTitle,
           role: m.role,
-          isLead: m.isLead,
+          isLead: idx === 0,
           name: m.name.trim(),
           rollNo: m.rollNo.trim().toUpperCase(),
-          email: m.email.trim(),
+          email: m.email.trim().toLowerCase(),
           branch: m.branch,
           year: m.year,
           phone: m.phone ? m.phone.trim() : ''
         }))
       };
 
-      const res = await fetch(`${backendUrl}/api/forensithon/create-order`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(orderPayload)
-      });
-
-      const orderData = await res.json();
-
-      if (!res.ok || !orderData.success) {
-        throw new Error(orderData.error || orderData.details || 'Failed to initiate registration order.');
-      }
+      const orderData = await createForensithonOrder(orderPayload);
 
       // 3. Configure and Open Razorpay Checkout Window
       const rzpOptions = {
         key: orderData.key || orderData.keyId,
-        amount: orderData.amount, // in paise: 30000 = ₹300
+        amount: orderData.amount, // in paise
         currency: orderData.currency || 'INR',
         name: 'FORENSITHON 2k26',
         description: `Team Registration (${teamName.trim()}) - ${currentChallenge.id}`,
@@ -619,23 +1026,14 @@ export default function RegistrationPage() {
         },
         handler: async function (paymentResponse) {
           try {
-            // 4. Verify Payment with Backend API & Save to event_forensithon_payments
-            const verifyRes = await fetch(`${backendUrl}/api/forensithon/verify-payment`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                razorpay_order_id: paymentResponse.razorpay_order_id,
-                razorpay_payment_id: paymentResponse.razorpay_payment_id,
-                razorpay_signature: paymentResponse.razorpay_signature,
-                registrationId: orderData.registrationId,
-                regDocId: orderData.regDocId
-              })
+            // 4. Verify Payment with Backend API & Save to central_event_student_payments
+            const verifyData = await verifyForensithonPayment({
+              razorpay_order_id: paymentResponse.razorpay_order_id,
+              razorpay_payment_id: paymentResponse.razorpay_payment_id,
+              razorpay_signature: paymentResponse.razorpay_signature,
+              registrationId: orderData.registrationId,
+              regDocId: orderData.regDocId
             });
-
-            const verifyData = await verifyRes.json();
-            if (!verifyRes.ok || !verifyData.success) {
-              throw new Error(verifyData.error || 'Server payment verification failed.');
-            }
 
             const timestamp = new Date().toLocaleString('en-IN', {
               day: 'numeric',
@@ -646,18 +1044,19 @@ export default function RegistrationPage() {
             });
 
             const confirmedRecord = {
-              regId: orderData.registrationId,
+              regId: verifyData.registrationId || orderData.registrationId,
+              paymentReference: verifyData.paymentReference || '',
               timestamp,
               teamName: teamName.trim(),
-              domain: currentDomainInfo?.title || `Domain ${selectedDomain}`,
+              domain: domainLabel,
               challengeId: currentChallenge.id,
               challengeTitle: currentChallenge.title,
-              forensicRole: currentChallenge.forensic,
-              technicalRole: currentChallenge.technical,
+              forensicRole: currentChallenge.forensic || currentChallenge.descriptionText || '',
+              technicalRole: currentChallenge.technical || '',
               members,
               razorpayOrderId: paymentResponse.razorpay_order_id,
               razorpayPaymentId: paymentResponse.razorpay_payment_id,
-              amount: orderData.amountInRupees || REGISTRATION_AMOUNT,
+              amount: orderData.amountInRupees || effectiveFeeAmount,
               status: 'PAID & CONFIRMED · VERIFIED VIA RAZORPAY'
             };
 
@@ -694,18 +1093,6 @@ export default function RegistrationPage() {
       setPaymentErrorMessage(err.message || 'An error occurred while connecting to the payment gateway.');
       setIsProcessingPayment(false);
     }
-  };
-
-  const handleReset = () => {
-    setSubmittedData(null);
-    setTeamName('');
-    setAgreed(false);
-    setValidationErrors({});
-    setIsProcessingPayment(false);
-    setPaymentErrorMessage('');
-    setMembers(createInitialMembers());
-    setConfirmedCount(0);
-    setEditingIdx(null);
   };
 
   const handleDownloadPdf = async () => {
@@ -863,10 +1250,13 @@ export default function RegistrationPage() {
               <div className="receipt-section receipt-payment-section">
                 <div>
                   <span className="receipt-subheading">PAYMENT VERIFICATION (RAZORPAY)</span>
-                  <p><strong>Registration Fee:</strong> ₹{submittedData.amount || REGISTRATION_AMOUNT} (Covering all 6 builders)</p>
+                  <p><strong>Registration Fee:</strong> ₹{submittedData.amount || effectiveFeeAmount} (Covering all 6 builders)</p>
+                  {submittedData.paymentReference && (
+                    <p><strong>Payment Reference:</strong> <code>{submittedData.paymentReference}</code></p>
+                  )}
                   <p><strong>Razorpay Payment ID:</strong> <code>{submittedData.razorpayPaymentId}</code></p>
                   <p><strong>Razorpay Order ID:</strong> <code>{submittedData.razorpayOrderId}</code></p>
-                  <p><strong>Collections Updated:</strong> <code>event_forensithon_registrations</code> &amp; <code>event_forensithon_payments</code></p>
+                  <p><strong>Collections Updated:</strong> <code>central_event_student_registrations</code> &amp; <code>central_event_student_payments</code></p>
                 </div>
                 <div className="receipt-stamp-box">
                   <span className="aditya-stamp">ADITYA UNIVERSITY</span>
@@ -908,9 +1298,9 @@ export default function RegistrationPage() {
               <button
                 type="button"
                 className="button secondary"
-                onClick={handleReset}
+                onClick={handleLogout}
               >
-                Register Another Team +
+                Logout / Switch Account ↪
               </button>
               <Link to="/rounds" className="button secondary">
                 View Path to Final ↗
@@ -961,7 +1351,7 @@ export default function RegistrationPage() {
               <span className="fact-pill fact-pill--blue">ENTRY FEE</span>
             </div>
             <span className="fact-label">Registration Fee</span>
-            <strong className="fact-value">₹{REGISTRATION_AMOUNT} per team</strong>
+            <strong className="fact-value">₹{effectiveFeeAmount} per team</strong>
             <span className="fact-sub">Razorpay gateway · All 6 builders included</span>
           </div>
 
@@ -1021,8 +1411,326 @@ export default function RegistrationPage() {
           </div>
         </div>
 
-        {/* Interactive Registration Form */}
-        <form className="registration-form-modern" onSubmit={handleSubmit} noValidate>
+        {/* 2-Tab Card (Register Team Leader / Login) OR Logged-in Squad Portal */}
+        {!loggedInLeader ? (
+          <div className="auth-card-shell" aria-label="Team Leader Account Access">
+            <div className="auth-tabs-bar" role="tablist">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={authMode === 'register'}
+                className={`auth-tab-btn ${authMode === 'register' ? 'active' : ''}`}
+                onClick={() => {
+                  setAuthMode('register');
+                  setAuthError('');
+                  setAuthSuccess('');
+                }}
+              >
+                Register Team Leader
+                <span className="auth-tab-badge">NEW TEAM</span>
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={authMode === 'login'}
+                className={`auth-tab-btn ${authMode === 'login' ? 'active' : ''}`}
+                onClick={() => {
+                  setAuthMode('login');
+                  setAuthError('');
+                }}
+              >
+                Login Team Member / Lead
+                <span className="auth-tab-badge">EXISTING ACCOUNT</span>
+              </button>
+            </div>
+
+            <div className="auth-card-body">
+              {authMode === 'register' ? (
+                <form onSubmit={handleTeamLeaderRegister} noValidate>
+                  <div className="auth-card-intro">
+                    <h2>Step 1 · Register as Team Leader</h2>
+                    <p>
+                      Create your Team Leader account with your <strong>Team Name</strong>. Enter your Roll No to auto-fill details. Once registered, login lets you add the remaining 5 team members and complete Razorpay payment.
+                    </p>
+                  </div>
+
+                  {authError && (
+                    <div className="payment-error-alert" role="alert" style={{ marginBottom: '18px' }}>
+                      <span>{authError}</span>
+                    </div>
+                  )}
+
+                  <div className="form-grid-2col">
+                    <div className="form-field-group">
+                      <label htmlFor="authTeamName" className="form-label required">
+                        Team Name
+                      </label>
+                      <input
+                        id="authTeamName"
+                        type="text"
+                        className="form-input"
+                        placeholder="e.g. CyberSherlocks, ForensicForge"
+                        value={registerForm.teamName}
+                        onChange={(e) => setRegisterForm((p) => ({ ...p, teamName: e.target.value }))}
+                      />
+                    </div>
+
+                    <div className="form-field-group">
+                      <label htmlFor="authRollNo" className="form-label required">
+                        Team Leader Roll No
+                      </label>
+                      <input
+                        id="authRollNo"
+                        type="text"
+                        className={`form-input ${authLookupStatus.status === 'found' ? 'form-input--verified' : ''}`}
+                        placeholder="e.g. 22A91A..."
+                        value={registerForm.rollNo}
+                        onChange={(e) => handleRegisterRollChange(e.target.value)}
+                        onBlur={(e) => triggerAuthRollLookup(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            triggerAuthRollLookup(e.currentTarget.value);
+                          }
+                        }}
+                      />
+                      {authLookupStatus.status === 'loading' && (
+                        <span className="lookup-pill lookup-pill--loading">
+                          <span className="lookup-spinner" /> Fetching...
+                        </span>
+                      )}
+                      {authLookupStatus.status === 'found' && (
+                        <span className="lookup-pill lookup-pill--found">
+                          {authLookupStatus.message}
+                        </span>
+                      )}
+                      {authLookupStatus.status === 'not_found' && (
+                        <span className="lookup-pill lookup-pill--manual">
+                          {authLookupStatus.message}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="form-field-group">
+                      <label htmlFor="authLeaderName" className="form-label required">
+                        Team Leader Full Name
+                      </label>
+                      <input
+                        id="authLeaderName"
+                        type="text"
+                        className="form-input"
+                        placeholder="Full Name"
+                        value={registerForm.name}
+                        onChange={(e) => setRegisterForm((p) => ({ ...p, name: e.target.value }))}
+                      />
+                    </div>
+
+                    <div className="form-field-group">
+                      <label htmlFor="authLeaderEmail" className="form-label required">
+                        Email ID
+                      </label>
+                      <input
+                        id="authLeaderEmail"
+                        type="email"
+                        className="form-input"
+                        placeholder="roll@aditya.ac.in"
+                        value={registerForm.email}
+                        onChange={(e) => setRegisterForm((p) => ({ ...p, email: e.target.value }))}
+                      />
+                    </div>
+
+                    <div className="form-field-group">
+                      <label htmlFor="authLeaderMobile" className="form-label required">
+                        Mobile Number
+                      </label>
+                      <input
+                        id="authLeaderMobile"
+                        type="tel"
+                        maxLength={10}
+                        className="form-input"
+                        placeholder="10-digit primary contact"
+                        value={registerForm.mobile}
+                        onChange={(e) => setRegisterForm((p) => ({ ...p, mobile: e.target.value }))}
+                      />
+                    </div>
+
+                    <div className="form-field-group">
+                      <label htmlFor="authLeaderBranch" className="form-label required">
+                        Branch / Department
+                      </label>
+                      <select
+                        id="authLeaderBranch"
+                        className="form-select"
+                        value={registerForm.branch}
+                        onChange={(e) => setRegisterForm((p) => ({ ...p, branch: e.target.value }))}
+                      >
+                        {[...FORENSIC_BRANCH_OPTIONS, ...ENGINEERING_BRANCH_OPTIONS, ...OPEN_BRANCH_OPTIONS].map((opt) => (
+                          <option key={opt} value={opt}>{opt}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="form-field-group">
+                      <label htmlFor="authLeaderYear" className="form-label required">
+                        Year of Study
+                      </label>
+                      <select
+                        id="authLeaderYear"
+                        className="form-select"
+                        value={registerForm.year}
+                        onChange={(e) => setRegisterForm((p) => ({ ...p, year: e.target.value }))}
+                      >
+                        {YEAR_OPTIONS.map((y) => (
+                          <option key={y} value={y}>{y}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="form-field-group">
+                      <label htmlFor="authRegisterPassword" className="form-label required">
+                        Create Password
+                      </label>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <input
+                          id="authRegisterPassword"
+                          type={showAuthPassword ? 'text' : 'password'}
+                          className="form-input"
+                          placeholder="Min. 4 characters"
+                          value={registerForm.password}
+                          onChange={(e) => setRegisterForm((p) => ({ ...p, password: e.target.value }))}
+                        />
+                        <button
+                          type="button"
+                          className="button secondary"
+                          style={{ minHeight: '42px', padding: '0 14px', fontSize: '12px' }}
+                          onClick={() => setShowAuthPassword((v) => !v)}
+                        >
+                          {showAuthPassword ? 'Hide' : 'Show'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="form-submit-row" style={{ marginTop: '22px' }}>
+                    <button
+                      type="submit"
+                      className="button submit-registration-btn"
+                      disabled={authLoading}
+                    >
+                      {authLoading ? 'Registering Team Leader...' : 'Register as Team Leader & Continue →'}
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <form onSubmit={handleTeamLeaderLogin} noValidate>
+                  <div className="auth-card-intro">
+                    <h2>Team Login</h2>
+                    <p>
+                      Sign in with your Roll Number or Email ID. Your session token is saved so you can add remaining 5 team members, logout anytime, return on any day with your saved details intact, and complete payment when ready.
+                    </p>
+                  </div>
+
+                  {authSuccess && (
+                    <div className="payment-gate-banner payment-gate-banner--unlocked" role="status" style={{ marginBottom: '18px' }}>
+                      <span>✓ {authSuccess}</span>
+                    </div>
+                  )}
+
+                  {authError && (
+                    <div className="payment-error-alert" role="alert" style={{ marginBottom: '18px' }}>
+                      <span>{authError}</span>
+                    </div>
+                  )}
+
+                  <div className="form-grid-2col">
+                    <div className="form-field-group">
+                      <label htmlFor="authLoginIdentifier" className="form-label required">
+                        Roll Number or Email ID
+                      </label>
+                      <input
+                        id="authLoginIdentifier"
+                        type="text"
+                        className="form-input"
+                        placeholder="e.g. 22A91A0501 or roll@aditya.ac.in"
+                        value={loginForm.identifier}
+                        onChange={(e) => setLoginForm((p) => ({ ...p, identifier: e.target.value }))}
+                      />
+                    </div>
+
+                    <div className="form-field-group">
+                      <label htmlFor="authLoginPassword" className="form-label required">
+                        Password
+                      </label>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <input
+                          id="authLoginPassword"
+                          type={showAuthPassword ? 'text' : 'password'}
+                          className="form-input"
+                          placeholder="Enter password"
+                          value={loginForm.password}
+                          onChange={(e) => setLoginForm((p) => ({ ...p, password: e.target.value }))}
+                        />
+                        <button
+                          type="button"
+                          className="button secondary"
+                          style={{ minHeight: '42px', padding: '0 14px', fontSize: '12px' }}
+                          onClick={() => setShowAuthPassword((v) => !v)}
+                        >
+                          {showAuthPassword ? 'Hide' : 'Show'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="form-submit-row" style={{ marginTop: '22px' }}>
+                    <button
+                      type="submit"
+                      className="button submit-registration-btn"
+                      disabled={authLoading}
+                    >
+                      {authLoading ? 'Signing in...' : 'Login to Team Portal →'}
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Logged-in Team Leader Bar */}
+            <div className="leader-session-bar">
+              <div className="leader-session-info">
+                <div className="leader-session-badges">
+                  <span className="leader-role-pill">
+                    {loggedInLeader.isTeamLeader || (members[0]?.rollNo && members[0].rollNo === loggedInLeader.roll)
+                      ? 'TEAM LEADER'
+                      : (loggedInLeader.role || 'TEAM MEMBER').toUpperCase()}
+                  </span>
+                  <span className="leader-team-pill">TEAM: {teamName || loggedInLeader.teamName || 'UNSET'}</span>
+                </div>
+                <h3 className="leader-session-title">
+                  {loggedInLeader.name} · {loggedInLeader.roll}
+                </h3>
+                <p className="leader-session-sub">
+                  Remaining Members Completed: <strong>{remainingFilledCount} / 5</strong> ·{' '}
+                  {allRemainingFiveFilled
+                    ? 'All 5 remaining members saved — Razorpay payment is unlocked!'
+                    : 'Fill and add all 5 remaining team members below to enable Razorpay payment.'}
+                </p>
+              </div>
+              <div className="leader-session-actions">
+                <button
+                  type="button"
+                  className="button secondary"
+                  onClick={handleLogout}
+                >
+                  Logout / Switch Account ↪
+                </button>
+              </div>
+            </div>
+
+            {/* Interactive Registration Form */}
+            <form className="registration-form-modern" onSubmit={handleSubmit} noValidate>
           {/* STEP 1: Domain & Challenge Statement Selection */}
           <div className="form-card-section">
             <div className="form-card-header">
@@ -1030,10 +1738,16 @@ export default function RegistrationPage() {
               <div>
                 <h2 className="form-section-title">Select Domain &amp; Problem Statement</h2>
                 <p className="form-section-desc">
-                  Choose the forensic domain and one of the 60 problem statements your team will solve.
+                  Choose a track and {catalog.challenges.length > 0 ? `one of the ${catalog.challenges.length} live problem statements` : 'a problem statement'} your team will solve.
                 </p>
               </div>
             </div>
+
+            {catalogError && (
+              <div className="payment-error-alert" role="alert" style={{ marginBottom: '16px' }}>
+                <span>Unable to load live tracks from Unified Portal: {catalogError}</span>
+              </div>
+            )}
 
             <div className="form-grid-2col">
               <div className="form-field-group">
@@ -1065,19 +1779,26 @@ export default function RegistrationPage() {
 
               <div className="form-field-group">
                 <label htmlFor="domainSelect" className="form-label required">
-                  Forensic Domain
+                  Forensic Track
                 </label>
                 <select
                   id="domainSelect"
                   className="form-select"
                   value={selectedDomain}
+                  disabled={catalogLoading || catalog.domains.length === 0}
                   onChange={(e) => handleDomainChange(e.target.value)}
                 >
-                  {eventData.domains.map((d) => (
-                    <option key={d.number} value={d.number}>
-                      Domain 0{d.number}: {d.title} ({d.ids})
-                    </option>
-                  ))}
+                  {catalogLoading ? (
+                    <option value="">Loading tracks...</option>
+                  ) : catalog.domains.length === 0 ? (
+                    <option value="">No tracks available</option>
+                  ) : (
+                    catalog.domains.map((d) => (
+                      <option key={d._id || d.code} value={d.code}>
+                        Track {String(d.sortOrder || d.number).padStart(2, '0')} · {d.name} ({d.ids})
+                      </option>
+                    ))
+                  )}
                 </select>
               </div>
             </div>
@@ -1085,23 +1806,43 @@ export default function RegistrationPage() {
             {/* Problem Statement Dropdown */}
             <div className="form-field-group" style={{ marginTop: '16px' }}>
               <label htmlFor="challengeSelect" className="form-label required">
-                Problem Statement ({domainChallenges.length} available in Domain 0{selectedDomain})
+                Problem Statement ({domainChallenges.length} available in {currentDomainInfo?.name || selectedDomain || 'Track'})
               </label>
               <select
                 id="challengeSelect"
-                className="form-select"
+                className={`form-select ${validationErrors.challenge ? 'form-input--error' : ''}`}
                 value={selectedChallengeId}
-                onChange={(e) => setSelectedChallengeId(e.target.value)}
+                disabled={catalogLoading || domainChallenges.length === 0}
+                onChange={(e) => {
+                  setSelectedChallengeId(e.target.value);
+                  if (validationErrors.challenge) {
+                    setValidationErrors((prev) => {
+                      const next = { ...prev };
+                      delete next.challenge;
+                      return next;
+                    });
+                  }
+                }}
+                data-error-key="challenge"
               >
-                {domainChallenges.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    [{c.id}] {c.title}
-                  </option>
-                ))}
+                {catalogLoading ? (
+                  <option value="">Loading problem statements...</option>
+                ) : domainChallenges.length === 0 ? (
+                  <option value="">No problem statements published in this track yet</option>
+                ) : (
+                  domainChallenges.map((c) => (
+                    <option key={c._id || c.id} value={c.id}>
+                      [{c.id}] {c.title}
+                    </option>
+                  ))
+                )}
               </select>
+              {validationErrors.challenge && (
+                <span className="form-error-msg">{validationErrors.challenge}</span>
+              )}
             </div>
 
-            {/* Selected Challenge Preview Card (Dual Role Pillars) */}
+            {/* Selected Challenge Preview Card */}
             {currentChallenge && (
               <div className="challenge-preview-card">
                 <div className="preview-header">
@@ -1109,16 +1850,46 @@ export default function RegistrationPage() {
                   <h3 className="preview-title">{currentChallenge.title}</h3>
                 </div>
 
-                <div className="preview-pillars-grid">
-                  <div className="preview-pillar preview-pillar--forensic">
-                    <span className="pillar-tag pillar-tag--forensic">FORENSIC SCIENCE SCOPE</span>
-                    <p>{currentChallenge.forensic}</p>
+                {currentChallenge.hasSplitScopes ? (
+                  <div className="preview-pillars-grid">
+                    {currentChallenge.forensic && (
+                      <div className="preview-pillar preview-pillar--forensic">
+                        <span className="pillar-tag pillar-tag--forensic">FORENSIC SCIENCE SCOPE</span>
+                        <p>{currentChallenge.forensic}</p>
+                      </div>
+                    )}
+                    {currentChallenge.technical && (
+                      <div className="preview-pillar preview-pillar--tech">
+                        <span className="pillar-tag pillar-tag--tech">TECHNICAL / ENGINEERING SCOPE</span>
+                        <p>{currentChallenge.technical}</p>
+                      </div>
+                    )}
                   </div>
-                  <div className="preview-pillar preview-pillar--tech">
-                    <span className="pillar-tag pillar-tag--tech">TECHNICAL / ENGINEERING SCOPE</span>
-                    <p>{currentChallenge.technical}</p>
-                  </div>
-                </div>
+                ) : (
+                  <>
+                    {currentChallenge.descriptionText && (
+                      <div className="preview-pillar preview-pillar--forensic" style={{ marginTop: '12px' }}>
+                        <span className="pillar-tag pillar-tag--forensic">CHALLENGE OVERVIEW</span>
+                        <p>{currentChallenge.descriptionText}</p>
+                      </div>
+                    )}
+                    {Array.isArray(currentChallenge.subFields) && currentChallenge.subFields.length > 0 && (
+                      <div className="preview-pillars-grid" style={{ marginTop: '12px' }}>
+                        {currentChallenge.subFields.map((sf, sfIdx) => (
+                          <div
+                            key={`${sf.label}-${sfIdx}`}
+                            className={`preview-pillar ${sfIdx % 2 === 0 ? 'preview-pillar--forensic' : 'preview-pillar--tech'}`}
+                          >
+                            <span className={`pillar-tag ${sfIdx % 2 === 0 ? 'pillar-tag--forensic' : 'pillar-tag--tech'}`}>
+                              {sf.label || `SECTION ${sfIdx + 1}`}
+                            </span>
+                            <p>{sf.value}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -1214,6 +1985,7 @@ export default function RegistrationPage() {
                         return next;
                       });
                       setEditingIdx(null);
+                      persistTeamDraft(members, teamName);
                     };
 
                     return (
@@ -1242,7 +2014,13 @@ export default function RegistrationPage() {
                               placeholder="e.g. 22A91A..."
                               value={m.rollNo}
                               onChange={(e) => handleMemberChange(idx, 'rollNo', e.target.value.toUpperCase())}
-                              onBlur={(e) => triggerStudentLookup(idx, e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  triggerStudentLookup(idx, e.currentTarget.value, true);
+                                }
+                              }}
+                              onBlur={(e) => triggerStudentLookup(idx, e.target.value, false)}
                               autoComplete="off"
                             />
                             {lookupStatuses[idx]?.status === 'loading' && (
@@ -1253,6 +2031,11 @@ export default function RegistrationPage() {
                             {lookupStatuses[idx]?.status === 'found' && (
                               <span className="lookup-pill lookup-pill--found">
                                 ✓ {lookupStatuses[idx].studentName}
+                              </span>
+                            )}
+                            {lookupStatuses[idx]?.status === 'not_found' && (
+                              <span className="lookup-pill lookup-pill--manual">
+                                {lookupStatuses[idx].message || 'Not found — enter manually'}
                               </span>
                             )}
                             {validationErrors[`member_${idx}_rollNo`] && (
@@ -1441,9 +2224,11 @@ export default function RegistrationPage() {
                 setValidationErrors((prev) => {
                   const next = { ...prev };
                   ['rollNo', 'name', 'email', 'phone'].forEach((f) => delete next[`member_${idx}_${f}`]);
+                  delete next.remainingMembers;
                   return next;
                 });
-                setConfirmedCount((prev) => prev + 1);
+                setConfirmedCount((prev) => Math.max(prev, idx + 1));
+                persistTeamDraft(members, teamName);
               };
 
               const isLastMember = idx === 5;
@@ -1473,7 +2258,13 @@ export default function RegistrationPage() {
                         placeholder="e.g. 22A91A..."
                         value={m.rollNo}
                         onChange={(e) => handleMemberChange(idx, 'rollNo', e.target.value.toUpperCase())}
-                        onBlur={(e) => triggerStudentLookup(idx, e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            triggerStudentLookup(idx, e.currentTarget.value, true);
+                          }
+                        }}
+                        onBlur={(e) => triggerStudentLookup(idx, e.target.value, false)}
                         autoComplete="off"
                       />
                       {lookupStatuses[idx]?.status === 'loading' && (
@@ -1484,6 +2275,11 @@ export default function RegistrationPage() {
                       {lookupStatuses[idx]?.status === 'found' && (
                         <span className="lookup-pill lookup-pill--found">
                           ✓ {lookupStatuses[idx].studentName}
+                        </span>
+                      )}
+                      {lookupStatuses[idx]?.status === 'not_found' && (
+                        <span className="lookup-pill lookup-pill--manual">
+                          {lookupStatuses[idx].message || 'Not found — enter manually'}
                         </span>
                       )}
                       {validationErrors[`member_${idx}_rollNo`] && (
@@ -1590,9 +2386,47 @@ export default function RegistrationPage() {
                   <circle cx="12" cy="12" r="10" />
                   <polyline points="20 6 9 17 4 12" />
                 </svg>
-                All 6 team members confirmed. Scroll down to complete payment &amp; submit.
+                All remaining 5 team members completed (6/6 squad). Scroll down to complete Razorpay payment.
               </div>
             )}
+
+            {/* Save Team Draft Status & Action Bar */}
+            <div className="team-save-bar">
+              <div className="team-save-meta">
+                <span>
+                  Remaining 5 Members Completed: <strong>{remainingFilledCount} / 5</strong>
+                </span>
+                {saveNotice && (
+                  <div style={{ color: '#166534', marginTop: '4px', fontSize: '12.5px' }}>{saveNotice}</div>
+                )}
+                {saveError && (
+                  <div style={{ color: '#dc2626', marginTop: '4px', fontSize: '12.5px' }}>{saveError}</div>
+                )}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  className="button secondary"
+                  style={{ minHeight: '40px', padding: '8px 16px', fontSize: '13px' }}
+                  disabled={savingDraft}
+                  onClick={() => persistTeamDraft(members, teamName)}
+                >
+                  {savingDraft ? 'Saving...' : 'Save Team Details to Database'}
+                </button>
+                <button
+                  type="button"
+                  className="button secondary"
+                  style={{ minHeight: '40px', padding: '8px 16px', fontSize: '13px', borderColor: '#ff5500', color: '#c2410c' }}
+                  disabled={savingDraft}
+                  onClick={async () => {
+                    await persistTeamDraft(members, teamName);
+                    handleLogout();
+                  }}
+                >
+                  Save &amp; Logout (Pay Later) ↪
+                </button>
+              </div>
+            </div>
           </div>
 
           {/* STEP 3: Razorpay Payment Gateway & Submission */}
@@ -1602,9 +2436,21 @@ export default function RegistrationPage() {
               <div>
                 <h2 className="form-section-title">Online Payment &amp; Submission</h2>
                 <p className="form-section-desc">
-                  Registration fee is ₹{REGISTRATION_AMOUNT} per team. Complete secure online payment via Razorpay Payment Gateway.
+                  Registration fee is ₹{effectiveFeeAmount} per team. Payment is enabled only after all remaining 5 team members are filled.
                 </p>
               </div>
+            </div>
+
+            <div className={`payment-gate-banner ${allRemainingFiveFilled ? 'payment-gate-banner--unlocked' : 'payment-gate-banner--locked'}`} data-error-key="remainingMembers">
+              {allRemainingFiveFilled ? (
+                <span>
+                  ✓ All remaining 5 team members (Members 02–06) are filled and saved. Razorpay payment is now enabled!
+                </span>
+              ) : (
+                <span>
+                  🔒 Payment disabled: Please fill and confirm all <strong>5 remaining team members</strong> in Step 02 ({remainingFilledCount}/5 completed) to enable Razorpay payment.
+                </span>
+              )}
             </div>
 
             <div className="payment-gateway-container">
@@ -1617,7 +2463,7 @@ export default function RegistrationPage() {
                     </svg>
                     SECURED BY RAZORPAY
                   </span>
-                  <span className="fee-tag">₹{REGISTRATION_AMOUNT}.00 · TEAM REGISTRATION</span>
+                  <span className="fee-tag">₹{effectiveFeeAmount}.00 · TEAM REGISTRATION</span>
                 </div>
 
                 <div className="payment-details-row">
@@ -1625,12 +2471,12 @@ export default function RegistrationPage() {
                     <span className="pay-label">EVENT REGISTRATION</span>
                     <h3 className="pay-title">FORENSITHON 2k26 · Six Builders Squad</h3>
                     <p className="pay-desc">
-                      One payment of ₹{REGISTRATION_AMOUNT} covers all 6 registered team members. Instant online verification.
+                      One payment of ₹{effectiveFeeAmount} covers all 6 registered team members. Instant online verification.
                     </p>
                   </div>
                   <div className="payment-amount-display">
                     <span className="amount-currency">INR</span>
-                    <strong className="amount-number">₹{REGISTRATION_AMOUNT}</strong>
+                    <strong className="amount-number">₹{effectiveFeeAmount}</strong>
                     <span className="amount-sub">Fixed team fee</span>
                   </div>
                 </div>
@@ -1691,22 +2537,28 @@ export default function RegistrationPage() {
               <button
                 type="submit"
                 className="button submit-registration-btn"
-                disabled={isProcessingPayment}
+                disabled={!allRemainingFiveFilled || isProcessingPayment}
               >
                 {isProcessingPayment ? (
                   <span className="btn-loading-flex">
                     <span className="spinner" /> Connecting to Razorpay Gateway...
                   </span>
+                ) : !allRemainingFiveFilled ? (
+                  `Pay ₹${effectiveFeeAmount} Disabled (${remainingFilledCount}/5 Remaining Members Filled)`
                 ) : (
-                  `Pay ₹${REGISTRATION_AMOUNT} via Razorpay & Complete Registration →`
+                  `Pay ₹${effectiveFeeAmount} via Razorpay & Complete Registration →`
                 )}
               </button>
               <p className="submit-hint">
-                A secure Razorpay payment window will open. Upon payment completion, your team registration is permanently stored in the university database.
+                {allRemainingFiveFilled
+                  ? 'A secure Razorpay payment window will open. Upon payment verification, full team details are saved in central_event_student_payments.'
+                  : 'Complete all remaining 5 members above in Step 02 to unlock the Razorpay payment button.'}
               </p>
             </div>
           </div>
         </form>
+          </>
+        )}
       </section>
     </main>
   );

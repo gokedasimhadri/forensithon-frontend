@@ -1,7 +1,35 @@
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { eventData } from '../data/eventData';
+import { fetchForensithonCatalog } from '../services/api';
 
 export default function HomePage() {
+  const [catalog, setCatalog] = useState({ domains: [], challenges: [] });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    fetchForensithonCatalog()
+      .then((data) => {
+        if (!active) return;
+        setCatalog({
+          domains: Array.isArray(data.domains) ? data.domains : [],
+          challenges: Array.isArray(data.challenges) ? data.challenges : []
+        });
+      })
+      .catch((err) => {
+        console.warn('HomePage dynamic catalog notice:', err.message);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const totalTracks = catalog.domains.length;
+  const totalChallenges = catalog.challenges.length;
+
   return (
     <main id="main-content">
       <section className="hero">
@@ -64,16 +92,20 @@ export default function HomePage() {
       <section className="section home-domains-section" id="summary-of-domains">
         <div className="domains-container">
           <div className="domains-heading-wrap">
-            <p className="eyebrow">SIX INVESTIGATIVE TRACKS · 60 PROBLEM STATEMENTS</p>
+            <p className="eyebrow">
+              {loading
+                ? 'INVESTIGATIVE TRACKS · LIVE PROBLEM STATEMENTS'
+                : `${totalTracks} INVESTIGATIVE TRACK${totalTracks === 1 ? '' : 'S'} · ${totalChallenges} PROBLEM STATEMENT${totalChallenges === 1 ? '' : 'S'}`}
+            </p>
             <h2 className="domains-main-heading">
               <span className="heading-accent-dot" aria-hidden="true">■</span> Summary of Domains
             </h2>
             <p className="domains-main-desc">
-              Explore the six core investigative domains of Forensithon 2k26. Every registered squad of six chooses exactly one challenge statement from across these specialized domains.
+              Explore the specialized investigative domains of Forensithon 2k26 fetched live from Central Events. Every registered squad of six chooses one challenge statement.
             </p>
           </div>
 
-          {/* Executive Summary Table matching Reference Image 2 */}
+          {/* Executive Summary Table */}
           <div className="domains-table-card">
             <div className="domains-table-wrapper">
               <table className="domains-summary-table">
@@ -87,31 +119,45 @@ export default function HomePage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {eventData.domains.map((dom) => (
-                    <tr key={dom.number} className="domain-row">
-                      <td className="cell-domain">
-                        <span className="domain-index-badge">{dom.number}</span>
-                      </td>
-                      <td className="cell-title">
-                        <strong className="domain-title-text">{dom.title}</strong>
-                      </td>
-                      <td className="cell-ids">
-                        <span className="domain-ids-pill">{dom.ids}</span>
-                      </td>
-                      <td className="cell-focus">
-                        <p className="domain-focus-desc">{dom.focus}</p>
-                      </td>
-                      <td className="cell-action">
-                        <Link
-                          to={`/challenges?domain=${dom.number}`}
-                          className="domain-table-link"
-                          title={`View all 10 problem statements under ${dom.title}`}
-                        >
-                          Explore <span aria-hidden="true">→</span>
-                        </Link>
+                  {loading ? (
+                    <tr>
+                      <td colSpan={5} style={{ textAlign: 'center', padding: '24px' }}>
+                        Loading investigative tracks...
                       </td>
                     </tr>
-                  ))}
+                  ) : catalog.domains.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} style={{ textAlign: 'center', padding: '24px' }}>
+                        No investigative tracks configured yet in Central Events.
+                      </td>
+                    </tr>
+                  ) : (
+                    catalog.domains.map((dom) => (
+                      <tr key={dom._id || dom.code} className="domain-row">
+                        <td className="cell-domain">
+                          <span className="domain-index-badge">{dom.number}</span>
+                        </td>
+                        <td className="cell-title">
+                          <strong className="domain-title-text">{dom.title}</strong>
+                        </td>
+                        <td className="cell-ids">
+                          <span className="domain-ids-pill">{dom.ids}</span>
+                        </td>
+                        <td className="cell-focus">
+                          <p className="domain-focus-desc">{dom.focus}</p>
+                        </td>
+                        <td className="cell-action">
+                          <Link
+                            to={`/challenges?domain=${encodeURIComponent(dom.code)}`}
+                            className="domain-table-link"
+                            title={`View problem statements under ${dom.name}`}
+                          >
+                            Explore ({dom.count}) <span aria-hidden="true">→</span>
+                          </Link>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -119,20 +165,22 @@ export default function HomePage() {
             <div className="domains-card-footer">
               <div className="domains-stat-box">
                 <span className="domains-stat-label">OFFICIAL CHALLENGE CATALOGUE</span>
-                <strong className="domains-stat-value">6 Domains · 60 Problem Statements (10 per domain)</strong>
+                <strong className="domains-stat-value">
+                  {totalTracks} Domain{totalTracks === 1 ? '' : 's'} · {totalChallenges} Problem Statement{totalChallenges === 1 ? '' : 's'}
+                </strong>
               </div>
               <Link to="/challenges" className="button small">
-                View All 60 Statements ↗
+                View All Statements ({totalChallenges}) ↗
               </Link>
             </div>
           </div>
 
           {/* Mobile-Friendly Cards View (auto-displayed on narrow viewports) */}
           <div className="domains-mobile-view" aria-label="Summary of domains mobile view">
-            {eventData.domains.map((dom) => (
-              <div key={dom.number} className="domain-card-item">
+            {catalog.domains.map((dom) => (
+              <div key={dom._id || dom.code} className="domain-card-item">
                 <div className="domain-card-top-row">
-                  <span className="domain-index-badge">Domain {dom.number}</span>
+                  <span className="domain-index-badge">Domain {dom.number} · {dom.code}</span>
                   <span className="domain-ids-pill">{dom.ids}</span>
                 </div>
                 <h3 className="domain-card-title">{dom.title}</h3>
@@ -141,10 +189,10 @@ export default function HomePage() {
                   {dom.focus}
                 </p>
                 <Link
-                  to={`/challenges?domain=${dom.number}`}
+                  to={`/challenges?domain=${encodeURIComponent(dom.code)}`}
                   className="domain-card-action-btn"
                 >
-                  View 10 Challenges in Domain {dom.number} →
+                  View {dom.count} Challenge{dom.count === 1 ? '' : 's'} in {dom.name} →
                 </Link>
               </div>
             ))}
@@ -160,7 +208,7 @@ export default function HomePage() {
             </div>
             <div className="domains-cta-links">
               <Link to="/challenges" className="button">
-                Explore All 60 Challenges ↗
+                Explore Live Challenges ↗
               </Link>
               <Link to="/registration" className="button secondary">
                 Register as Six →
