@@ -26,7 +26,7 @@ export default function ChallengesPage({ motionOff }) {
 
   const [search, setSearch] = useState('');
   const [selectedDomain, setSelectedDomain] = useState(
-    domainQuery && ['1', '2', '3', '4', '5', '6'].includes(domainQuery) ? domainQuery : 'all'
+    domainQuery && ['1', '2', '3', '4', '5', '6'].includes(domainQuery) ? domainQuery : '1'
   );
   const [viewMode, setViewMode] = useState('detailed'); // 'detailed' | 'compact'
   const [expandedCards, setExpandedCards] = useState(new Set());
@@ -38,19 +38,14 @@ export default function ChallengesPage({ motionOff }) {
     if (q && ['1', '2', '3', '4', '5', '6'].includes(q)) {
       setSelectedDomain(q);
     } else if (!q) {
-      setSelectedDomain('all');
+      setSelectedDomain('1');
     }
   }, [searchParams]);
 
   const handleSelectDomain = (domain) => {
     const nextDomain = String(domain);
     setSelectedDomain(nextDomain);
-    if (nextDomain === 'all') {
-      searchParams.delete('domain');
-      setSearchParams(searchParams, { replace: true });
-    } else {
-      setSearchParams({ domain: nextDomain }, { replace: true });
-    }
+    setSearchParams({ domain: nextDomain }, { replace: true });
     if (resultsRef.current) {
       resultsRef.current.scrollIntoView({
         behavior: motionOff ? 'auto' : 'smooth',
@@ -88,7 +83,7 @@ export default function ChallengesPage({ motionOff }) {
 
   const handleClearFilters = () => {
     setSearch('');
-    handleSelectDomain('all');
+    handleSelectDomain('1');
   };
 
   return (
@@ -109,20 +104,6 @@ export default function ChallengesPage({ motionOff }) {
         {/* Unified Domain / Track Navigation Hub */}
         <nav className="track-nav-container" aria-label="Challenge Tracks">
           <div className="track-nav-scroll">
-            <button
-              type="button"
-              className={`track-tab track-tab--all ${selectedDomain === 'all' ? 'active' : ''}`}
-              onClick={() => handleSelectDomain('all')}
-              aria-pressed={selectedDomain === 'all'}
-            >
-              <div className="track-tab-header">
-                <span className="track-tab-code">ALL</span>
-                <span className="track-tab-count">60</span>
-              </div>
-              <strong className="track-tab-name">All 6 Tracks</strong>
-              <span className="track-tab-range">DF-01 to INT-10</span>
-            </button>
-
             {eventData.domains.map((dom) => {
               const isActive = selectedDomain === String(dom.number);
               const code = DOMAIN_CODES[dom.number] || `D0${dom.number}`;
@@ -259,15 +240,9 @@ export default function ChallengesPage({ motionOff }) {
         </div>
 
         {/* Filter Tags Summary */}
-        {(search || selectedDomain !== 'all') && (
+        {search && (
           <div className="active-filters-summary">
             <span className="filters-label">Active Filters:</span>
-            {selectedDomain !== 'all' && (
-              <span className="active-tag">
-                Track: {DOMAIN_SHORT_NAMES[selectedDomain]} ({DOMAIN_CODES[selectedDomain]})
-                <button type="button" onClick={() => handleSelectDomain('all')} aria-label="Remove track filter">×</button>
-              </span>
-            )}
             {search && (
               <span className="active-tag">
                 Keyword: "{search}"
@@ -277,9 +252,9 @@ export default function ChallengesPage({ motionOff }) {
             <button
               type="button"
               className="clear-all-filters-btn"
-              onClick={handleClearFilters}
+              onClick={() => setSearch('')}
             >
-              Reset All Filters
+              Clear Search
             </button>
           </div>
         )}
@@ -295,7 +270,7 @@ export default function ChallengesPage({ motionOff }) {
               className="button"
               onClick={handleClearFilters}
             >
-              Show All 60 Challenges
+              Show DF Track Challenges
             </button>
           </div>
         ) : (
