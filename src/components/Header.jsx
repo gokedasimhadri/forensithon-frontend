@@ -1,6 +1,35 @@
-import { Link, NavLink } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { Link, NavLink, useNavigate } from 'react-router-dom';
+import { getStoredTeamLeader, getStoredAuthToken, clearStoredTeamLeader } from '../services/api';
 
 export default function Header({ motionOff, toggleMotion }) {
+  const navigate = useNavigate();
+  const [loggedUser, setLoggedUser] = useState(() => {
+    const user = getStoredTeamLeader();
+    const token = getStoredAuthToken();
+    return user || token ? user : null;
+  });
+
+  useEffect(() => {
+    const syncAuth = () => {
+      const user = getStoredTeamLeader();
+      const token = getStoredAuthToken();
+      setLoggedUser(user || token ? user : null);
+    };
+    window.addEventListener('forensithon-auth-changed', syncAuth);
+    window.addEventListener('storage', syncAuth);
+    return () => {
+      window.removeEventListener('forensithon-auth-changed', syncAuth);
+      window.removeEventListener('storage', syncAuth);
+    };
+  }, []);
+
+  const handleHeaderLogout = () => {
+    clearStoredTeamLeader();
+    setLoggedUser(null);
+    navigate('/registration');
+  };
+
   return (
     <header className="site-header">
       <Link to="/" title="FORENSITHON 2k26 Home">
@@ -33,15 +62,28 @@ export default function Header({ motionOff, toggleMotion }) {
           Register
         </NavLink>
       </nav>
-      <button
-        type="button"
-        className="motion-toggle"
-        onClick={toggleMotion}
-        aria-pressed={motionOff}
-        aria-label="Toggle motion animations"
-      >
-        {motionOff ? 'Motion: Off' : 'Motion: On'}
-      </button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+        {loggedUser && (
+          <button
+            type="button"
+            className="motion-toggle"
+            onClick={handleHeaderLogout}
+            title={`Logged in as ${loggedUser.name || loggedUser.roll || 'Student'}. Click to logout.`}
+            style={{ background: '#fff5f0', borderColor: '#ff5500', color: '#c2410c', fontWeight: 700 }}
+          >
+            Logout ({loggedUser.roll || loggedUser.name?.split(' ')[0] || 'User'}) ↪
+          </button>
+        )}
+        <button
+          type="button"
+          className="motion-toggle"
+          onClick={toggleMotion}
+          aria-pressed={motionOff}
+          aria-label="Toggle motion animations"
+        >
+          {motionOff ? 'Motion: Off' : 'Motion: On'}
+        </button>
+      </div>
     </header>
   );
 }
