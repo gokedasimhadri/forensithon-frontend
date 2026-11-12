@@ -31,6 +31,12 @@ export default defineConfig(({ mode }) => {
           target: 'https://info.aec.edu.in',
           changeOrigin: true,
           secure: false
+        },
+        '^/forensithon/adityaapi': {
+          target: 'https://info.aec.edu.in',
+          changeOrigin: true,
+          secure: false,
+          rewrite: (path) => path.replace(/^\/forensithon\/adityaapi/, '/adityaapi')
         }
       }
     },
@@ -41,7 +47,24 @@ export default defineConfig(({ mode }) => {
       strictPort: true,
       allowedHosts: [
         'events.adityauniversity.in'
-      ]
+      ],
+      proxy: {
+        '/api': {
+          target,
+          changeOrigin: true
+        },
+        '/adityaapi': {
+          target: 'https://info.aec.edu.in',
+          changeOrigin: true,
+          secure: false
+        },
+        '^/forensithon/adityaapi': {
+          target: 'https://info.aec.edu.in',
+          changeOrigin: true,
+          secure: false,
+          rewrite: (path) => path.replace(/^\/forensithon\/adityaapi/, '/adityaapi')
+        }
+      }
     }
   }
 })
