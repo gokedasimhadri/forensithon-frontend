@@ -523,10 +523,14 @@ export default function ChallengesPage({ motionOff }) {
 
                       {/* Card Footer */}
                       <div className="feed-card-footer">
-                        <div className="feed-team-rule">
-                          <span className="team-rule-icon" aria-hidden="true">👥</span>
-                          <span>{c.squadLabel}</span>
-                        </div>
+                        {c.squadLabel ? (
+                          <div className="feed-team-rule">
+                            <span className="team-rule-icon" aria-hidden="true">👥</span>
+                            <span>{c.squadLabel}</span>
+                          </div>
+                        ) : (
+                          <div />
+                        )}
 
                         <div className="feed-footer-actions">
                           {viewMode === 'compact' && isCardOpen && (

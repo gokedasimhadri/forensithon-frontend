@@ -352,13 +352,22 @@ export async function fetchForensithonCatalog(typeCode = EVENT_TYPE) {
       const teamType = String(ev.participation?.type || 'TEAM').toUpperCase();
       const feeRupees = ev.fee?.amount !== undefined ? Math.round(Number(ev.fee.amount) / 100) : null;
 
-      let squadLabel = 'Squad of 6: 2 Forensic/CSDF + 2 Engineering + 2 Open Disciplines';
-      if (teamType === 'SINGLE') {
-        squadLabel = 'Individual Entry';
-      } else if (minTeam !== 6 || maxTeam !== 6) {
-        squadLabel = minTeam === maxTeam
-          ? `Team of ${minTeam} participants`
-          : `Team of ${minTeam}–${maxTeam} participants`;
+      // Resolve squad / team rule: prioritize the exact rule added by admin in Central Events
+      const explicitRules = Array.isArray(ev.rules)
+        ? ev.rules.map(r => String(r || '').trim()).filter(Boolean)
+        : [];
+
+      let squadLabel = '';
+      if (explicitRules.length > 0) {
+        squadLabel = explicitRules.join(' • ');
+      } else if (teamType === 'TEAM' || minTeam > 1) {
+        squadLabel = (minTeam === 6 && maxTeam === 6)
+          ? 'Squad of 6: 2 Forensic/CSDF + 2 Engineering + 2 Open Disciplines'
+          : minTeam === maxTeam
+            ? `Team of ${minTeam} participants`
+            : `Team of ${minTeam}–${maxTeam} participants`;
+      } else {
+        squadLabel = 'Squad of 6: 2 Forensic/CSDF + 2 Engineering + 2 Open Disciplines';
       }
 
       const eventSubFields = [];
@@ -466,9 +475,11 @@ export async function fetchForensithonCatalog(typeCode = EVENT_TYPE) {
           subFields: normSubFields,
           hasSplitScopes: hasBothOrSplit && normSubFields.length <= 2 && Boolean(forensicScope || technicalScope),
           outcomes: [],
-          rules: [],
+          rules: Array.isArray(sub.rules) ? sub.rules.filter(Boolean) : [],
           participation: { type: 'TEAM', minTeamSize: 6, maxTeamSize: 6 },
-          squadLabel: 'Squad of 6: 2 Forensic/CSDF + 2 Engineering + 2 Open Disciplines',
+          squadLabel: (Array.isArray(sub.rules) && sub.rules.filter(Boolean).length > 0)
+            ? sub.rules.filter(Boolean).join(' • ')
+            : 'Squad of 6: 2 Forensic/CSDF + 2 Engineering + 2 Open Disciplines',
           feeRupees: null,
           mode: 'OFFLINE',
           venueName: '',
