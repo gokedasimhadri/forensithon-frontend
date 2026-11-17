@@ -752,7 +752,7 @@ export default function RegistrationPage() {
       setRegisterForm(createInitialRegisterForm());
       setAuthLookupStatus({ status: 'idle', message: '', studentName: '' });
       setAuthSuccess(
-        `Team "${student?.teamName || tName}" registered in central_event_student_account! Please login below with ${student?.roll || rNo} and your password to add the remaining 5 team members.`
+        `Team "${student?.teamName || tName}" registered successfully! Please login below with ${student?.roll || rNo} and your password to add the remaining 5 team members.`
       );
     } catch (err) {
       setAuthError(err.message || 'Unable to register Team Leader.');
@@ -856,10 +856,7 @@ export default function RegistrationPage() {
         }))
       });
 
-      const savedCount = Number(result?.completedMembersCount ?? nextMembersList.slice(1, 6).filter(isMemberComplete).length);
-      setSaveNotice(
-        `Saved in central_event_student_registrations (${savedCount}/5 remaining members completed).`
-      );
+      setSaveNotice('');
     } catch (err) {
       setSaveError(err.message || 'Unable to save team progress.');
     } finally {
@@ -1233,7 +1230,7 @@ export default function RegistrationPage() {
               <div className="receipt-section">
                 <span className="receipt-subheading">REGISTERED SQUAD (6 BUILDERS)</span>
                 <p className="receipt-branch-confirmation">
-                  ✓ Verified &amp; Stored in Database: Exactly 6 Aditya University students (2 Forensic + 2 Engineering + 2 Open Discipline)
+                  ✓ Verified: Exactly 6 Aditya University students (2 Forensic + 2 Engineering + 2 Open Discipline)
                 </p>
 
                 <div className="receipt-members-grid">
@@ -1265,7 +1262,6 @@ export default function RegistrationPage() {
                   )}
                   <p><strong>Razorpay Payment ID:</strong> <code>{submittedData.razorpayPaymentId}</code></p>
                   <p><strong>Razorpay Order ID:</strong> <code>{submittedData.razorpayOrderId}</code></p>
-                  <p><strong>Collections Updated:</strong> <code>central_event_student_registrations</code> &amp; <code>central_event_student_payments</code></p>
                 </div>
                 <div className="receipt-stamp-box">
                   <span className="aditya-stamp">ADITYA UNIVERSITY</span>
@@ -2405,23 +2401,11 @@ export default function RegistrationPage() {
                 <span>
                   Remaining 5 Members Completed: <strong>{remainingFilledCount} / 5</strong>
                 </span>
-                {saveNotice && (
-                  <div style={{ color: '#166534', marginTop: '4px', fontSize: '12.5px' }}>{saveNotice}</div>
-                )}
                 {saveError && (
                   <div style={{ color: '#dc2626', marginTop: '4px', fontSize: '12.5px' }}>{saveError}</div>
                 )}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                <button
-                  type="button"
-                  className="button secondary"
-                  style={{ minHeight: '40px', padding: '8px 16px', fontSize: '13px' }}
-                  disabled={savingDraft}
-                  onClick={() => persistTeamDraft(members, teamName)}
-                >
-                  {savingDraft ? 'Saving...' : 'Save Team Details to Database'}
-                </button>
                 <button
                   type="button"
                   className="button secondary"
@@ -2560,7 +2544,7 @@ export default function RegistrationPage() {
               </button>
               <p className="submit-hint">
                 {allRemainingFiveFilled
-                  ? 'A secure Razorpay payment window will open. Upon payment verification, full team details are saved in central_event_student_payments.'
+                  ? 'A secure Razorpay payment window will open. Upon payment verification, your team registration will be confirmed.'
                   : 'Complete all remaining 5 members above in Step 02 to unlock the Razorpay payment button.'}
               </p>
             </div>
