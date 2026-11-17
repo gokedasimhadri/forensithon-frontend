@@ -981,6 +981,7 @@ export default function RegistrationPage() {
       const orderPayload = {
         amount: effectiveFeeAmount,
         teamName: teamName.trim(),
+        teamId: loggedInLeader?.teamId || undefined,
         domainId: domainNumber,
         domainCode: currentDomainInfo?.code || selectedDomain || '',
         domainTitle: domainLabel,
@@ -1016,6 +1017,7 @@ export default function RegistrationPage() {
         description: `Team Registration (${teamName.trim()}) - ${currentChallenge.id}`,
         image: `${import.meta.env.BASE_URL}aditya-university-logo.jpg`,
         order_id: orderData.orderId,
+        notes: orderData.notes || undefined,
         prefill: {
           name: members[0].name.trim(),
           email: members[0].email.trim(),
@@ -1045,6 +1047,7 @@ export default function RegistrationPage() {
 
             const confirmedRecord = {
               regId: verifyData.registrationId || orderData.registrationId,
+              teamId: verifyData.teamId || orderData.teamId || '',
               paymentReference: verifyData.paymentReference || '',
               timestamp,
               teamName: teamName.trim(),
@@ -1181,6 +1184,12 @@ export default function RegistrationPage() {
               </div>
 
               <div className="receipt-meta-row">
+                <div>
+                  <span className="receipt-meta-label">TEAM ID</span>
+                  <span className="receipt-id-badge" style={{ background: '#ff5500', color: '#fff', fontWeight: 700, letterSpacing: '0.5px' }}>
+                    {submittedData.teamId || submittedData.regId}
+                  </span>
+                </div>
                 <div>
                   <span className="receipt-meta-label">REGISTRATION ID</span>
                   <span className="receipt-id-badge">{submittedData.regId}</span>
