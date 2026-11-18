@@ -176,7 +176,6 @@ const createInitialMembers = () => [
     id: 1,
     tier: 'forensic',
     tierTitle: 'Tier 1 · Forensic Science',
-    role: 'Team Leader & Primary Contact',
     isLead: true,
     rollNo: '',
     name: '',
@@ -189,7 +188,6 @@ const createInitialMembers = () => [
     id: 2,
     tier: 'forensic',
     tierTitle: 'Tier 1 · Forensic Science',
-    role: 'Forensic Investigator',
     isLead: false,
     rollNo: '',
     name: '',
@@ -203,7 +201,6 @@ const createInitialMembers = () => [
     id: 3,
     tier: 'engineering',
     tierTitle: 'Tier 2 · Engineering & Allied',
-    role: 'Technical Lead & Builder',
     isLead: false,
     rollNo: '',
     name: '',
@@ -216,7 +213,6 @@ const createInitialMembers = () => [
     id: 4,
     tier: 'engineering',
     tierTitle: 'Tier 2 · Engineering & Allied',
-    role: 'Technical Specialist',
     isLead: false,
     rollNo: '',
     name: '',
@@ -230,7 +226,6 @@ const createInitialMembers = () => [
     id: 5,
     tier: 'open',
     tierTitle: 'Tier 3 · Open Discipline',
-    role: 'Research & UX Lead',
     isLead: false,
     rollNo: '',
     name: '',
@@ -243,7 +238,6 @@ const createInitialMembers = () => [
     id: 6,
     tier: 'open',
     tierTitle: 'Tier 3 · Open Discipline',
-    role: 'Interdisciplinary Builder',
     isLead: false,
     rollNo: '',
     name: '',
@@ -353,8 +347,8 @@ export default function RegistrationPage() {
     const remainingList = Array.isArray(savedReg?.teamMembers) && savedReg.teamMembers.length > 0
       ? savedReg.teamMembers
       : Array.isArray(savedReg?.participants)
-      ? savedReg.participants.slice(1, 6)
-      : [];
+        ? savedReg.participants.slice(1, 6)
+        : [];
 
     let consecutiveConfirmed = isMemberComplete(base[0]) ? 1 : 0;
     for (let i = 0; i < 5; i += 1) {
@@ -396,20 +390,21 @@ export default function RegistrationPage() {
 
       const isConfirmedAndPaid = Boolean(
         state?.isConfirmedAndPaid ||
-        (String(reg?.status || '').toUpperCase() === 'CONFIRMED' &&
-          String(pay?.status || '').toUpperCase() === 'PAID')
+        String(reg?.status || '').toUpperCase() === 'CONFIRMED' ||
+        String(reg?.payment?.status || '').toUpperCase() === 'PAID' ||
+        String(pay?.status || '').toUpperCase() === 'PAID'
       );
 
-      if (isConfirmedAndPaid && reg && pay) {
+      if ((isConfirmedAndPaid || String(reg?.status || '').toUpperCase() === 'CONFIRMED') && reg) {
         const paidAtDate = pay?.paidAt || reg?.paidAt || reg?.payment?.paidAt || reg?.updatedAt || reg?.updated_at;
         const timestamp = paidAtDate
           ? new Date(paidAtDate).toLocaleString('en-IN', {
-              day: 'numeric',
-              month: 'short',
-              year: 'numeric',
-              hour: '2-digit',
-              minute: '2-digit'
-            })
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+          })
           : new Date().toLocaleString('en-IN');
 
         const resolvedAmount =
@@ -531,12 +526,6 @@ export default function RegistrationPage() {
     let active = true;
     setSyncingTeamState(true);
 
-    // Pre-fill leader slot immediately while saved 6-member draft/confirmed record loads from DB
-    const cachedLeader = getStoredTeamLeader() || loggedInLeader;
-    if (cachedLeader) {
-      applyServerState(cachedLeader, null, Boolean(initialChallengeId));
-    }
-
     refreshLoggedInStudent()
       .then(async (verifiedStudent) => {
         if (!active) return;
@@ -585,11 +574,32 @@ export default function RegistrationPage() {
     try {
       const student = await fetchStudentDetailsFromApi(cleanRoll);
 
+      if (student && student.alreadyRegistered) {
+        lastFetchedRollRef.current[index] = cleanRoll;
+        const studentName = (student.studentname || student.studentName || student.name || cleanRoll).trim();
+        setLookupStatuses((prev) => {
+          const copy = [...prev];
+          copy[index] = {
+            status: 'already_registered',
+            studentName,
+            message: `Already registered in team "${student.teamName}" for ${student.eventTitle}!`
+          };
+          return copy;
+        });
+        setValidationErrors((prev) => ({
+          ...prev,
+          [`member_${index}_rollNo`]: `Already Registered: ${studentName} (${cleanRoll}) is already registered in team "${student.teamName}" for "${student.eventTitle}". Registered students cannot register again.`
+        }));
+        return;
+      }
+
       if (student && !student.error && (student.studentname || student.studentName || student.name)) {
         lastFetchedRollRef.current[index] = cleanRoll;
         const studentName = (student.studentname || student.studentName || student.name || '').trim();
         const phone = (student.mobilenumber || student.MobileNumber || student.mobile || student.phone || student.fathermobilenumber || '').trim();
         const rawEmail = (student.emailid || student.email || student.Email || student.EmailId || '').trim();
+        const defaultStudentEmail = cleanRoll ? `${cleanRoll.toLowerCase()}@aditya.ac.in` : '';
+        const resolvedEmail = (rawEmail || defaultStudentEmail).toLowerCase();
 
         const tier = members[index]?.tier || 'forensic';
         const mappedYear = mapSemesterToYear(student.semestername || student.semester || student.year, student.joinedbatch, student.coursename);
@@ -600,7 +610,7 @@ export default function RegistrationPage() {
           copy[index] = {
             ...copy[index],
             name: studentName || copy[index].name,
-            email: rawEmail ? rawEmail.toLowerCase() : copy[index].email,
+            email: resolvedEmail,
             branch: mappedBranch || copy[index].branch,
             year: mappedYear || copy[index].year,
             phone: phone || copy[index].phone
@@ -624,7 +634,7 @@ export default function RegistrationPage() {
           const next = { ...prev };
           delete next[`member_${index}_rollNo`];
           delete next[`member_${index}_name`];
-          if (rawEmail) delete next[`member_${index}_email`];
+          if (resolvedEmail) delete next[`member_${index}_email`];
           if (phone) delete next[`member_${index}_phone`];
           return next;
         });
@@ -634,6 +644,16 @@ export default function RegistrationPage() {
           copy[index] = { status: 'not_found', studentName: '', message: 'Not found — enter manually' };
           return copy;
         });
+        if (cleanRoll.length >= 6) {
+          setMembers((prev) => {
+            const copy = [...prev];
+            copy[index] = {
+              ...copy[index],
+              email: `${cleanRoll.toLowerCase()}@aditya.ac.in`
+            };
+            return copy;
+          });
+        }
       }
     } catch (err) {
       console.warn('Student lookup failed:', err);
@@ -721,10 +741,26 @@ export default function RegistrationPage() {
       // Ignore stale response if user already changed the Roll Number input
       if (latestAuthRollRef.current !== cleanRoll) return;
 
+      if (student && student.alreadyRegistered) {
+        lastAuthAutoFilledRollRef.current = cleanRoll;
+        const studentName = (student.studentname || student.studentName || student.name || cleanRoll).trim();
+        setAuthLookupStatus({
+          status: 'already_registered',
+          studentName,
+          message: `Already registered in team "${student.teamName}" for "${student.eventTitle}"!`
+        });
+        setAuthError(
+          `Student (${cleanRoll}) is already registered in team "${student.teamName}" for "${student.eventTitle}". Re-registration is not allowed. Please switch to the Login tab to view your registration details.`
+        );
+        return;
+      }
+
       if (student && !student.error && (student.studentname || student.studentName || student.name)) {
         const studentName = (student.studentname || student.studentName || student.name || '').trim();
         const phone = (student.mobilenumber || student.MobileNumber || student.mobile || student.phone || student.fathermobilenumber || '').trim();
         const rawEmail = (student.emailid || student.email || student.Email || student.EmailId || '').trim().toLowerCase();
+        const defaultStudentEmail = cleanRoll ? `${cleanRoll.toLowerCase()}@aditya.ac.in` : '';
+        const resolvedEmail = rawEmail || defaultStudentEmail;
         const mappedYear = mapSemesterToYear(student.semestername || student.semester || student.year, student.joinedbatch, student.coursename);
         const mappedBranch = mapStudentBranch('forensic', student.branch || student.department, student.coursename);
 
@@ -732,7 +768,7 @@ export default function RegistrationPage() {
         setRegisterForm((prev) => ({
           ...prev,
           name: studentName || '',
-          email: rawEmail || '',
+          email: resolvedEmail || '',
           mobile: phone || '',
           branch: mappedBranch || prev.branch,
           year: mappedYear || prev.year,
@@ -795,6 +831,11 @@ export default function RegistrationPage() {
     if (!emailVal || !emailVal.includes('@')) return setAuthError('Please enter a valid Email ID.');
     if (!mobileVal) return setAuthError('Mobile number is required for the Team Leader.');
     if (!passwordVal || passwordVal.length < 4) return setAuthError('Please create a password (at least 4 characters).');
+    if (authLookupStatus?.status === 'already_registered') {
+      return setAuthError(
+        `Student (${rNo}) is already registered in a confirmed team. Re-registration is not allowed. Please switch to the Login tab.`
+      );
+    }
 
     setAuthLoading(true);
     try {
@@ -930,7 +971,6 @@ export default function RegistrationPage() {
           studentIndex: idx + 1,
           tier: m.tier,
           tierTitle: m.tierTitle,
-          role: m.role,
           isLead: idx === 0,
           name: (m.name || '').trim(),
           rollNo: (m.rollNo || '').trim().toUpperCase(),
@@ -952,7 +992,19 @@ export default function RegistrationPage() {
   const handleMemberChange = (index, field, value) => {
     setMembers((prev) => {
       const copy = [...prev];
-      copy[index] = { ...copy[index], [field]: value };
+      const prevMember = copy[index] || {};
+      const updated = { ...prevMember, [field]: value };
+
+      if (field === 'rollNo') {
+        const cleanRoll = value.trim().toUpperCase();
+        if (cleanRoll.length >= 6) {
+          updated.email = `${cleanRoll.toLowerCase()}@aditya.ac.in`;
+        } else if (!cleanRoll) {
+          updated.email = '';
+        }
+      }
+
+      copy[index] = updated;
       return copy;
     });
 
@@ -1051,10 +1103,8 @@ export default function RegistrationPage() {
       const cleanRoll = String(m.rollNo || '').trim().toUpperCase();
       if (!cleanRoll) {
         errors[`member_${idx}_rollNo`] = `Roll number is required.`;
-      } else if (seenRolls.has(cleanRoll)) {
-        errors[`member_${idx}_rollNo`] = `Duplicate Roll Number (${cleanRoll}) already used in Member ${seenRolls.get(cleanRoll) + 1}.`;
-      } else {
-        seenRolls.set(cleanRoll, idx);
+      } else if (lookupStatuses[idx]?.status === 'already_registered') {
+        errors[`member_${idx}_rollNo`] = `Student (${m.rollNo}) is already registered in another team.`;
       }
       if (!m.name.trim()) {
         errors[`member_${idx}_name`] = `Student ${idx + 1} name is required.`;
@@ -1135,7 +1185,6 @@ export default function RegistrationPage() {
           studentIndex: idx + 1,
           tier: m.tier,
           tierTitle: m.tierTitle,
-          role: m.role,
           isLead: idx === 0,
           name: m.name.trim(),
           rollNo: m.rollNo.trim().toUpperCase(),
@@ -1390,7 +1439,7 @@ export default function RegistrationPage() {
                   {submittedData.members.map((m, idx) => (
                     <div key={idx} className={`receipt-member-item receipt-member-item--${m.tier}`}>
                       <div className="receipt-member-top">
-                        <span className="receipt-member-role">{m.role}</span>
+                        <span className="receipt-member-role">{m.role || (m.isLead || idx === 0 ? 'Team Leader' : `Member ${idx + 1}`)}</span>
                         <span className="receipt-member-tier-pill">{m.tierTitle}</span>
                       </div>
                       <span className="receipt-member-roll-badge">{m.rollNo}</span>
@@ -1670,6 +1719,11 @@ export default function RegistrationPage() {
                           {authLookupStatus.message}
                         </span>
                       )}
+                      {authLookupStatus.status === 'already_registered' && (
+                        <span className="lookup-pill" style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fca5a5', fontWeight: 600 }}>
+                          ⚠️ {authLookupStatus.message}
+                        </span>
+                      )}
                     </div>
 
                     <div className="form-field-group">
@@ -1912,845 +1966,858 @@ export default function RegistrationPage() {
 
             {/* Interactive Registration Form */}
             <form className="registration-form-modern" onSubmit={handleSubmit} noValidate>
-          {/* STEP 1: Domain & Challenge Statement Selection */}
-          <div className="form-card-section">
-            <div className="form-card-header">
-              <span className="step-num-badge">STEP 01</span>
-              <div>
-                <h2 className="form-section-title">Select Domain &amp; Problem Statement</h2>
-                <p className="form-section-desc">
-                  Choose a track and {catalog.challenges.length > 0 ? `one of the ${catalog.challenges.length} live problem statements` : 'a problem statement'} your team will solve.
-                </p>
-              </div>
-            </div>
-
-            {catalogError && (
-              <div className="payment-error-alert" role="alert" style={{ marginBottom: '16px' }}>
-                <span>Unable to load live tracks from Unified Portal: {catalogError}</span>
-              </div>
-            )}
-
-            <div className="form-grid-2col">
-              <div className="form-field-group">
-                <label htmlFor="teamName" className="form-label required">
-                  Team Name
-                </label>
-                <input
-                  id="teamName"
-                  type="text"
-                  className={`form-input ${validationErrors.teamName ? 'form-input--error' : ''}`}
-                  placeholder="e.g. CyberSherlocks, ForensicForge"
-                  value={teamName}
-                  onChange={(e) => {
-                    setTeamName(e.target.value);
-                    if (validationErrors.teamName) {
-                      setValidationErrors((prev) => {
-                        const copy = { ...prev };
-                        delete copy.teamName;
-                        return copy;
-                      });
-                    }
-                  }}
-                  data-error-key="teamName"
-                />
-                {validationErrors.teamName && (
-                  <span className="form-error-msg">{validationErrors.teamName}</span>
-                )}
-              </div>
-
-              <div className="form-field-group">
-                <label htmlFor="domainSelect" className="form-label required">
-                  Forensic Track
-                </label>
-                <select
-                  id="domainSelect"
-                  className="form-select"
-                  value={selectedDomain}
-                  disabled={catalogLoading || catalog.domains.length === 0}
-                  onChange={(e) => handleDomainChange(e.target.value)}
-                >
-                  {catalogLoading ? (
-                    <option value="">Loading tracks...</option>
-                  ) : catalog.domains.length === 0 ? (
-                    <option value="">No tracks available</option>
-                  ) : (
-                    catalog.domains.map((d) => (
-                      <option key={d._id || d.code} value={d.code}>
-                        Track {String(d.sortOrder || d.number).padStart(2, '0')} · {d.name} ({d.ids})
-                      </option>
-                    ))
-                  )}
-                </select>
-              </div>
-            </div>
-
-            {/* Problem Statement Dropdown */}
-            <div className="form-field-group" style={{ marginTop: '16px' }}>
-              <label htmlFor="challengeSelect" className="form-label required">
-                Problem Statement ({domainChallenges.length} available in {currentDomainInfo?.name || selectedDomain || 'Track'})
-              </label>
-              <select
-                id="challengeSelect"
-                className={`form-select ${validationErrors.challenge ? 'form-input--error' : ''}`}
-                value={selectedChallengeId}
-                disabled={catalogLoading || domainChallenges.length === 0}
-                onChange={(e) => {
-                  setSelectedChallengeId(e.target.value);
-                  if (validationErrors.challenge) {
-                    setValidationErrors((prev) => {
-                      const next = { ...prev };
-                      delete next.challenge;
-                      return next;
-                    });
-                  }
-                }}
-                data-error-key="challenge"
-              >
-                {catalogLoading ? (
-                  <option value="">Loading problem statements...</option>
-                ) : domainChallenges.length === 0 ? (
-                  <option value="">No problem statements published in this track yet</option>
-                ) : (
-                  domainChallenges.map((c) => (
-                    <option key={c._id || c.id} value={c.id}>
-                      [{c.id}] {c.title}
-                    </option>
-                  ))
-                )}
-              </select>
-              {validationErrors.challenge && (
-                <span className="form-error-msg">{validationErrors.challenge}</span>
-              )}
-            </div>
-
-            {/* Selected Challenge Preview Card */}
-            {currentChallenge && (
-              <div className="challenge-preview-card">
-                <div className="preview-header">
-                  <span className="preview-id-pill">{currentChallenge.id}</span>
-                  <h3 className="preview-title">{currentChallenge.title}</h3>
+              {/* STEP 1: Domain & Challenge Statement Selection */}
+              <div className="form-card-section">
+                <div className="form-card-header">
+                  <span className="step-num-badge">STEP 01</span>
+                  <div>
+                    <h2 className="form-section-title">Select Domain &amp; Problem Statement</h2>
+                    <p className="form-section-desc">
+                      Choose a track and {catalog.challenges.length > 0 ? `one of the ${catalog.challenges.length} live problem statements` : 'a problem statement'} your team will solve.
+                    </p>
+                  </div>
                 </div>
 
-                {currentChallenge.hasSplitScopes ? (
-                  <div className="preview-pillars-grid">
-                    {currentChallenge.forensic && (
-                      <div className="preview-pillar preview-pillar--forensic">
-                        <span className="pillar-tag pillar-tag--forensic">FORENSIC SCIENCE SCOPE</span>
-                        <p>{currentChallenge.forensic}</p>
-                      </div>
-                    )}
-                    {currentChallenge.technical && (
-                      <div className="preview-pillar preview-pillar--tech">
-                        <span className="pillar-tag pillar-tag--tech">TECHNICAL / ENGINEERING SCOPE</span>
-                        <p>{currentChallenge.technical}</p>
-                      </div>
+                {catalogError && (
+                  <div className="payment-error-alert" role="alert" style={{ marginBottom: '16px' }}>
+                    <span>Unable to load live tracks from Unified Portal: {catalogError}</span>
+                  </div>
+                )}
+
+                <div className="form-grid-2col">
+                  <div className="form-field-group">
+                    <label htmlFor="teamName" className="form-label required">
+                      Team Name
+                    </label>
+                    <input
+                      id="teamName"
+                      type="text"
+                      className={`form-input ${validationErrors.teamName ? 'form-input--error' : ''}`}
+                      placeholder="e.g. CyberSherlocks, ForensicForge"
+                      value={teamName}
+                      onChange={(e) => {
+                        setTeamName(e.target.value);
+                        if (validationErrors.teamName) {
+                          setValidationErrors((prev) => {
+                            const copy = { ...prev };
+                            delete copy.teamName;
+                            return copy;
+                          });
+                        }
+                      }}
+                      data-error-key="teamName"
+                    />
+                    {validationErrors.teamName && (
+                      <span className="form-error-msg">{validationErrors.teamName}</span>
                     )}
                   </div>
-                ) : (
-                  <>
-                    {currentChallenge.descriptionText && (
-                      <div className="preview-pillar preview-pillar--forensic" style={{ marginTop: '12px' }}>
-                        <span className="pillar-tag pillar-tag--forensic">CHALLENGE OVERVIEW</span>
-                        <p>{currentChallenge.descriptionText}</p>
-                      </div>
+
+                  <div className="form-field-group">
+                    <label htmlFor="domainSelect" className="form-label required">
+                      Forensic Track
+                    </label>
+                    <select
+                      id="domainSelect"
+                      className="form-select"
+                      value={selectedDomain}
+                      disabled={catalogLoading || catalog.domains.length === 0}
+                      onChange={(e) => handleDomainChange(e.target.value)}
+                    >
+                      {catalogLoading ? (
+                        <option value="">Loading tracks...</option>
+                      ) : catalog.domains.length === 0 ? (
+                        <option value="">No tracks available</option>
+                      ) : (
+                        catalog.domains.map((d) => (
+                          <option key={d._id || d.code} value={d.code}>
+                            Track {String(d.sortOrder || d.number).padStart(2, '0')} · {d.name} ({d.ids})
+                          </option>
+                        ))
+                      )}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Problem Statement Dropdown */}
+                <div className="form-field-group" style={{ marginTop: '16px' }}>
+                  <label htmlFor="challengeSelect" className="form-label required">
+                    Problem Statement ({domainChallenges.length} available in {currentDomainInfo?.name || selectedDomain || 'Track'})
+                  </label>
+                  <select
+                    id="challengeSelect"
+                    className={`form-select ${validationErrors.challenge ? 'form-input--error' : ''}`}
+                    value={selectedChallengeId}
+                    disabled={catalogLoading || domainChallenges.length === 0}
+                    onChange={(e) => {
+                      setSelectedChallengeId(e.target.value);
+                      if (validationErrors.challenge) {
+                        setValidationErrors((prev) => {
+                          const next = { ...prev };
+                          delete next.challenge;
+                          return next;
+                        });
+                      }
+                    }}
+                    data-error-key="challenge"
+                  >
+                    {catalogLoading ? (
+                      <option value="">Loading problem statements...</option>
+                    ) : domainChallenges.length === 0 ? (
+                      <option value="">No problem statements published in this track yet</option>
+                    ) : (
+                      domainChallenges.map((c) => (
+                        <option key={c._id || c.id} value={c.id}>
+                          [{c.id}] {c.title}
+                        </option>
+                      ))
                     )}
-                    {Array.isArray(currentChallenge.subFields) && currentChallenge.subFields.length > 0 && (
-                      <div className="preview-pillars-grid" style={{ marginTop: '12px' }}>
-                        {currentChallenge.subFields.map((sf, sfIdx) => (
-                          <div
-                            key={`${sf.label}-${sfIdx}`}
-                            className={`preview-pillar ${sfIdx % 2 === 0 ? 'preview-pillar--forensic' : 'preview-pillar--tech'}`}
-                          >
-                            <span className={`pillar-tag ${sfIdx % 2 === 0 ? 'pillar-tag--forensic' : 'pillar-tag--tech'}`}>
-                              {sf.label || `SECTION ${sfIdx + 1}`}
-                            </span>
-                            <p>{sf.value}</p>
+                  </select>
+                  {validationErrors.challenge && (
+                    <span className="form-error-msg">{validationErrors.challenge}</span>
+                  )}
+                </div>
+
+                {/* Selected Challenge Preview Card */}
+                {currentChallenge && (
+                  <div className="challenge-preview-card">
+                    <div className="preview-header">
+                      <span className="preview-id-pill">{currentChallenge.id}</span>
+                      <h3 className="preview-title">{currentChallenge.title}</h3>
+                    </div>
+
+                    {currentChallenge.hasSplitScopes ? (
+                      <div className="preview-pillars-grid">
+                        {currentChallenge.forensic && (
+                          <div className="preview-pillar preview-pillar--forensic">
+                            <span className="pillar-tag pillar-tag--forensic">FORENSIC SCIENCE SCOPE</span>
+                            <p>{currentChallenge.forensic}</p>
                           </div>
-                        ))}
+                        )}
+                        {currentChallenge.technical && (
+                          <div className="preview-pillar preview-pillar--tech">
+                            <span className="pillar-tag pillar-tag--tech">TECHNICAL / ENGINEERING SCOPE</span>
+                            <p>{currentChallenge.technical}</p>
+                          </div>
+                        )}
                       </div>
+                    ) : (
+                      <>
+                        {currentChallenge.descriptionText && (
+                          <div className="preview-pillar preview-pillar--forensic" style={{ marginTop: '12px' }}>
+                            <span className="pillar-tag pillar-tag--forensic">CHALLENGE OVERVIEW</span>
+                            <p>{currentChallenge.descriptionText}</p>
+                          </div>
+                        )}
+                        {Array.isArray(currentChallenge.subFields) && currentChallenge.subFields.length > 0 && (
+                          <div className="preview-pillars-grid" style={{ marginTop: '12px' }}>
+                            {currentChallenge.subFields.map((sf, sfIdx) => (
+                              <div
+                                key={`${sf.label}-${sfIdx}`}
+                                className={`preview-pillar ${sfIdx % 2 === 0 ? 'preview-pillar--forensic' : 'preview-pillar--tech'}`}
+                              >
+                                <span className={`pillar-tag ${sfIdx % 2 === 0 ? 'pillar-tag--forensic' : 'pillar-tag--tech'}`}>
+                                  {sf.label || `SECTION ${sfIdx + 1}`}
+                                </span>
+                                <p>{sf.value}</p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </>
                     )}
-                  </>
+                  </div>
                 )}
               </div>
-            )}
-          </div>
 
-          {/* STEP 2: Team Members — Horizontal Add-One-By-One & In-Place Edit Flow */}
-          <div className="form-card-section">
-            <div className="form-card-header">
-              <span className="step-num-badge">STEP 02</span>
-              <div>
-                <h2 className="form-section-title">Add Team Members</h2>
-                <p className="form-section-desc">
-                  Fill in each member's details and click <strong>+ Add Member</strong> to confirm.
-                  Exactly <strong>6 members</strong> required (2 Forensic / CSDF · 2 Engineering · 2 Open).
-                </p>
-              </div>
-            </div>
+              {/* STEP 2: Team Members — Horizontal Add-One-By-One & In-Place Edit Flow */}
+              <div className="form-card-section">
+                <div className="form-card-header">
+                  <span className="step-num-badge">STEP 02</span>
+                  <div>
+                    <h2 className="form-section-title">Add Team Members</h2>
+                    <p className="form-section-desc">
+                      Fill in each member's details and click <strong>+ Add Member</strong> to confirm.
+                      Exactly <strong>6 members</strong> required (2 Forensic / CSDF · 2 Engineering · 2 Open).
+                    </p>
+                  </div>
+                </div>
 
-            {/* Progress tracker */}
-            <div className="member-progress-track">
-              {members.map((m, idx) => {
-                const isConfirmed = idx < confirmedCount;
-                const isCurrent = editingIdx !== null ? idx === editingIdx : idx === confirmedCount;
-                const tierDot = m.tier === 'forensic' ? '#1e3a5f' : m.tier === 'engineering' ? '#1a4731' : '#4a1942';
-                return (
-                  <div
-                    key={idx}
-                    className={`progress-step ${isConfirmed && editingIdx !== idx ? 'progress-step--done' : isCurrent ? 'progress-step--active' : ''}`}
-                    onClick={() => {
-                      if (isConfirmed) setEditingIdx(idx);
-                    }}
-                    style={{ cursor: isConfirmed ? 'pointer' : 'default' }}
-                    title={isConfirmed ? `Click to edit ${m.name || `Member ${idx + 1}`}` : `Member ${idx + 1}`}
-                  >
-                    <span
-                      className="progress-step-dot"
-                      style={{
-                        background: isConfirmed && editingIdx !== idx ? tierDot : isCurrent ? '#ff5500' : '#e2e8f0',
-                        borderColor: isCurrent ? '#ff5500' : 'transparent'
-                      }}
-                    >
-                      {isConfirmed && editingIdx !== idx ? '✓' : idx + 1}
-                    </span>
-                    <span className="progress-step-label">
-                      {editingIdx === idx
-                        ? 'Editing'
-                        : isConfirmed
-                        ? (m.name ? m.name.split(' ')[0] : `M${idx + 1}`)
-                        : isCurrent
-                        ? 'Filling...'
-                        : `M${idx + 1}`}
+                {/* Progress tracker */}
+                <div className="member-progress-track">
+                  {members.map((m, idx) => {
+                    const isConfirmed = idx < confirmedCount;
+                    const isCurrent = editingIdx !== null ? idx === editingIdx : idx === confirmedCount;
+                    const tierDot = m.tier === 'forensic' ? '#1e3a5f' : m.tier === 'engineering' ? '#1a4731' : '#4a1942';
+                    return (
+                      <div
+                        key={idx}
+                        className={`progress-step ${isConfirmed && editingIdx !== idx ? 'progress-step--done' : isCurrent ? 'progress-step--active' : ''}`}
+                        onClick={() => {
+                          if (isConfirmed) setEditingIdx(idx);
+                        }}
+                        style={{ cursor: isConfirmed ? 'pointer' : 'default' }}
+                        title={isConfirmed ? `Click to edit ${m.name || `Member ${idx + 1}`}` : `Member ${idx + 1}`}
+                      >
+                        <span
+                          className="progress-step-dot"
+                          style={{
+                            background: isConfirmed && editingIdx !== idx ? tierDot : isCurrent ? '#ff5500' : '#e2e8f0',
+                            borderColor: isCurrent ? '#ff5500' : 'transparent'
+                          }}
+                        >
+                          {isConfirmed && editingIdx !== idx ? '✓' : idx + 1}
+                        </span>
+                        <span className="progress-step-label">
+                          {editingIdx === idx
+                            ? 'Editing'
+                            : isConfirmed
+                              ? (m.name ? m.name.split(' ')[0] : `M${idx + 1}`)
+                              : isCurrent
+                                ? 'Filling...'
+                                : `M${idx + 1}`}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Confirmed Members List (with in-place editing) */}
+                {confirmedCount > 0 && (
+                  <div className="added-members-list">
+                    {members.slice(0, confirmedCount).map((m, idx) => {
+                      const isForensic = m.tier === 'forensic';
+                      const isEngineering = m.tier === 'engineering';
+                      const branchOptions = isForensic
+                        ? FORENSIC_BRANCH_OPTIONS
+                        : isEngineering
+                          ? ENGINEERING_BRANCH_OPTIONS
+                          : OPEN_BRANCH_OPTIONS;
+                      const tierLabel = isForensic
+                        ? 'Forensic Science / CSDF'
+                        : isEngineering
+                          ? 'Engineering & Allied'
+                          : 'Open Discipline';
+                      const tierColor = isForensic ? '#1e3a5f' : isEngineering ? '#1a4731' : '#4a1942';
+
+                      // If this member is currently being edited, render its open form in-place!
+                      if (editingIdx === idx) {
+                        const handleSaveEdit = async () => {
+                          const errors = {};
+                          if (!m.rollNo.trim()) errors[`member_${idx}_rollNo`] = 'Roll number is required.';
+                          if (!m.name.trim()) errors[`member_${idx}_name`] = 'Full name is required.';
+                          if (!m.email.trim()) errors[`member_${idx}_email`] = 'Email address is required.';
+                          else if (!m.email.includes('@')) errors[`member_${idx}_email`] = 'Enter a valid email address.';
+                          if (m.isLead && !m.phone.trim()) errors[`member_${idx}_phone`] = 'Phone number is required for the Team Leader.';
+
+                          if (Object.keys(errors).length > 0) {
+                            setValidationErrors((prev) => ({ ...prev, ...errors }));
+                            return;
+                          }
+
+                          const eligibility = await verifyMemberCanJoinEvent(idx, m.rollNo);
+                          if (!eligibility.ok) {
+                            setValidationErrors((prev) => ({
+                              ...prev,
+                              [`member_${idx}_rollNo`]: eligibility.error
+                            }));
+                            return;
+                          }
+
+                          setValidationErrors((prev) => {
+                            const next = { ...prev };
+                            ['rollNo', 'name', 'email', 'phone'].forEach((f) => delete next[`member_${idx}_${f}`]);
+                            return next;
+                          });
+                          setEditingIdx(null);
+                          persistTeamDraft(members, teamName);
+                        };
+
+                        return (
+                          <div className="member-inline-form member-inline-form--editing" style={{ borderTop: `3px solid ${tierColor}` }} key={idx}>
+                            <div className="member-inline-header">
+                              <span
+                                className="member-num-circle"
+                                style={{ background: tierColor, color: '#fff', fontSize: '13px', fontWeight: 800 }}
+                              >
+                                {String(idx + 1).padStart(2, '0')}
+                              </span>
+                              <div>
+                                <strong className="member-tier-label">{tierLabel}</strong>
+                                {m.isLead && <span className="lead-tag" style={{ marginLeft: '10px' }}>TEAM LEADER</span>}
+                                <span className="lead-tag" style={{ marginLeft: '10px', background: '#0a0d14' }}>EDITING</span>
+                              </div>
+                              <span className="member-inline-progress">Editing Member {idx + 1} of 6</span>
+                            </div>
+
+                            <div className="member-inline-fields">
+                              <div className="form-field-group">
+                                <label className="form-label required">Roll No</label>
+                                <input
+                                  type="text"
+                                  className={`form-input ${lookupStatuses[idx]?.status === 'found' ? 'form-input--verified' : ''} ${validationErrors[`member_${idx}_rollNo`] ? 'form-input--error' : ''}`}
+                                  placeholder="e.g. 22A91A..."
+                                  value={m.rollNo}
+                                  onChange={(e) => handleMemberChange(idx, 'rollNo', e.target.value.toUpperCase())}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault();
+                                      triggerStudentLookup(idx, e.currentTarget.value, true);
+                                    }
+                                  }}
+                                  onBlur={(e) => triggerStudentLookup(idx, e.target.value, false)}
+                                  autoComplete="off"
+                                />
+                                {lookupStatuses[idx]?.status === 'loading' && (
+                                  <span className="lookup-pill lookup-pill--loading">
+                                    <span className="lookup-spinner" /> Fetching...
+                                  </span>
+                                )}
+                                {lookupStatuses[idx]?.status === 'found' && (
+                                  <span className="lookup-pill lookup-pill--found">
+                                    ✓ {lookupStatuses[idx].studentName}
+                                  </span>
+                                )}
+                                {lookupStatuses[idx]?.status === 'not_found' && (
+                                  <span className="lookup-pill lookup-pill--manual">
+                                    {lookupStatuses[idx].message || 'Not found — enter manually'}
+                                  </span>
+                                )}
+                                {lookupStatuses[idx]?.status === 'already_registered' && (
+                                  <span className="lookup-pill" style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fca5a5', fontWeight: 600 }}>
+                                    ⚠️ {lookupStatuses[idx].message || 'Already registered in another team'}
+                                  </span>
+                                )}
+                                {validationErrors[`member_${idx}_rollNo`] && (
+                                  <span className="form-error-msg">{validationErrors[`member_${idx}_rollNo`]}</span>
+                                )}
+                              </div>
+
+                              <div className="form-field-group">
+                                <label className="form-label required">Full Name</label>
+                                <input
+                                  type="text"
+                                  className={`form-input ${validationErrors[`member_${idx}_name`] ? 'form-input--error' : ''}`}
+                                  placeholder="Student Full Name"
+                                  value={m.name}
+                                  onChange={(e) => handleMemberChange(idx, 'name', e.target.value)}
+                                  autoComplete="off"
+                                />
+                                {validationErrors[`member_${idx}_name`] && (
+                                  <span className="form-error-msg">{validationErrors[`member_${idx}_name`]}</span>
+                                )}
+                              </div>
+
+                              <div className="form-field-group">
+                                <label className="form-label required">Email</label>
+                                <input
+                                  type="email"
+                                  className={`form-input ${validationErrors[`member_${idx}_email`] ? 'form-input--error' : ''}`}
+                                  placeholder="roll@aditya.ac.in"
+                                  value={m.email}
+                                  onChange={(e) => handleMemberChange(idx, 'email', e.target.value)}
+                                  autoComplete="off"
+                                />
+                                {validationErrors[`member_${idx}_email`] && (
+                                  <span className="form-error-msg">{validationErrors[`member_${idx}_email`]}</span>
+                                )}
+                              </div>
+
+                              <div className="form-field-group">
+                                <label className="form-label required">Branch</label>
+                                <select
+                                  className="form-select"
+                                  value={m.branch}
+                                  onChange={(e) => handleMemberChange(idx, 'branch', e.target.value)}
+                                >
+                                  {branchOptions.map((opt) => (
+                                    <option key={opt} value={opt}>{opt}</option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              <div className="form-field-group">
+                                <label className="form-label required">Year</label>
+                                <select
+                                  className="form-select"
+                                  value={m.year}
+                                  onChange={(e) => handleMemberChange(idx, 'year', e.target.value)}
+                                >
+                                  {YEAR_OPTIONS.map((y) => (
+                                    <option key={y} value={y}>{y}</option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              <div className="form-field-group">
+                                <label className={`form-label ${m.isLead ? 'required' : ''}`}>
+                                  Phone {m.isLead && <span style={{ color: '#ff5500' }}>*</span>}
+                                </label>
+                                <input
+                                  type="tel"
+                                  className={`form-input ${validationErrors[`member_${idx}_phone`] ? 'form-input--error' : ''}`}
+                                  placeholder={m.isLead ? 'Primary contact' : '10-digit (optional)'}
+                                  maxLength={10}
+                                  value={m.phone}
+                                  onChange={(e) => handleMemberChange(idx, 'phone', e.target.value)}
+                                />
+                                {validationErrors[`member_${idx}_phone`] && (
+                                  <span className="form-error-msg">{validationErrors[`member_${idx}_phone`]}</span>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="member-inline-actions">
+                              <button
+                                type="button"
+                                className="add-member-btn"
+                                onClick={handleSaveEdit}
+                              >
+                                ✓ Save Changes
+                              </button>
+                              <button
+                                type="button"
+                                className="button secondary"
+                                style={{ minHeight: '44px', padding: '10px 18px', fontSize: '13px' }}
+                                onClick={() => {
+                                  setEditingIdx(null);
+                                  setValidationErrors((prev) => {
+                                    const next = { ...prev };
+                                    ['rollNo', 'name', 'email', 'phone'].forEach((f) => delete next[`member_${idx}_${f}`]);
+                                    return next;
+                                  });
+                                }}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      // Closed summary row
+                      const tierColors = { forensic: '#1e3a5f', engineering: '#1a4731', open: '#4a1942' };
+                      const tierLabels = { forensic: 'Forensic', engineering: 'Engineering', open: 'Open' };
+                      return (
+                        <div
+                          key={idx}
+                          className="added-member-row"
+                          style={{ borderLeft: `4px solid ${tierColors[m.tier] || '#ff5500'}` }}
+                        >
+                          <span className="added-member-num">{String(idx + 1).padStart(2, '0')}</span>
+                          <div className="added-member-info">
+                            <strong>{m.name || '—'}</strong>
+                            <span>
+                              {m.rollNo || '—'} · {tierLabels[m.tier]} · {m.branch} · {m.year}
+                              {m.phone ? ` · ${m.phone}` : ''}
+                            </span>
+                          </div>
+                          {m.isLead && (
+                            <span className="lead-tag" style={{ marginLeft: 'auto', flexShrink: 0 }}>
+                              TEAM LEADER
+                            </span>
+                          )}
+                          <button
+                            type="button"
+                            className="member-edit-btn"
+                            onClick={() => setEditingIdx(idx)}
+                            title={`Edit Member ${idx + 1}`}
+                          >
+                            ✎ Edit
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* If currently editing an existing member, show hint */}
+                {editingIdx !== null && confirmedCount < 6 && (
+                  <div className="editing-mode-banner">
+                    <span>
+                      Currently editing Member 0{editingIdx + 1}. Click <strong>✓ Save Changes</strong> or <strong>Cancel</strong> above to continue adding new members.
                     </span>
                   </div>
-                );
-              })}
-            </div>
+                )}
 
-            {/* Confirmed Members List (with in-place editing) */}
-            {confirmedCount > 0 && (
-              <div className="added-members-list">
-                {members.slice(0, confirmedCount).map((m, idx) => {
+                {/* Form to add next new member (shown only when not currently editing an earlier member) */}
+                {confirmedCount < 6 && editingIdx === null && (() => {
+                  const idx = confirmedCount;
+                  const m = members[idx];
                   const isForensic = m.tier === 'forensic';
                   const isEngineering = m.tier === 'engineering';
                   const branchOptions = isForensic
                     ? FORENSIC_BRANCH_OPTIONS
                     : isEngineering
-                    ? ENGINEERING_BRANCH_OPTIONS
-                    : OPEN_BRANCH_OPTIONS;
+                      ? ENGINEERING_BRANCH_OPTIONS
+                      : OPEN_BRANCH_OPTIONS;
                   const tierLabel = isForensic
                     ? 'Forensic Science / CSDF'
                     : isEngineering
-                    ? 'Engineering & Allied'
-                    : 'Open Discipline';
+                      ? 'Engineering & Allied'
+                      : 'Open Discipline';
                   const tierColor = isForensic ? '#1e3a5f' : isEngineering ? '#1a4731' : '#4a1942';
 
-                  // If this member is currently being edited, render its open form in-place!
-                  if (editingIdx === idx) {
-                    const handleSaveEdit = async () => {
-                      const errors = {};
-                      if (!m.rollNo.trim()) errors[`member_${idx}_rollNo`] = 'Roll number is required.';
-                      if (!m.name.trim()) errors[`member_${idx}_name`] = 'Full name is required.';
-                      if (!m.email.trim()) errors[`member_${idx}_email`] = 'Email address is required.';
-                      else if (!m.email.includes('@')) errors[`member_${idx}_email`] = 'Enter a valid email address.';
-                      if (m.isLead && !m.phone.trim()) errors[`member_${idx}_phone`] = 'Phone number is required for the Team Leader.';
+                  const handleAddMember = async () => {
+                    const errors = {};
+                    if (!m.rollNo.trim()) errors[`member_${idx}_rollNo`] = 'Roll number is required.';
+                    else if (lookupStatuses[idx]?.status === 'already_registered') {
+                      errors[`member_${idx}_rollNo`] = 'This student is already registered in a confirmed Forensithon team. Re-registration is not allowed.';
+                    }
+                    if (!m.name.trim()) errors[`member_${idx}_name`] = 'Full name is required.';
+                    if (!m.email.trim()) errors[`member_${idx}_email`] = 'Email address is required.';
+                    else if (!m.email.includes('@')) errors[`member_${idx}_email`] = 'Enter a valid email address.';
+                    if (m.isLead && !m.phone.trim()) errors[`member_${idx}_phone`] = 'Phone number is required for the Team Leader.';
 
-                      if (Object.keys(errors).length > 0) {
-                        setValidationErrors((prev) => ({ ...prev, ...errors }));
-                        return;
-                      }
+                    if (Object.keys(errors).length > 0) {
+                      setValidationErrors((prev) => ({ ...prev, ...errors }));
+                      return;
+                    }
 
-                      const eligibility = await verifyMemberCanJoinEvent(idx, m.rollNo);
-                      if (!eligibility.ok) {
-                        setValidationErrors((prev) => ({
-                          ...prev,
-                          [`member_${idx}_rollNo`]: eligibility.error
-                        }));
-                        return;
-                      }
+                    const eligibility = await verifyMemberCanJoinEvent(idx, m.rollNo);
+                    if (!eligibility.ok) {
+                      setValidationErrors((prev) => ({
+                        ...prev,
+                        [`member_${idx}_rollNo`]: eligibility.error
+                      }));
+                      return;
+                    }
 
-                      setValidationErrors((prev) => {
-                        const next = { ...prev };
-                        ['rollNo', 'name', 'email', 'phone'].forEach((f) => delete next[`member_${idx}_${f}`]);
-                        return next;
-                      });
-                      setEditingIdx(null);
-                      persistTeamDraft(members, teamName);
-                    };
+                    setValidationErrors((prev) => {
+                      const next = { ...prev };
+                      ['rollNo', 'name', 'email', 'phone'].forEach((f) => delete next[`member_${idx}_${f}`]);
+                      delete next.remainingMembers;
+                      return next;
+                    });
+                    setConfirmedCount((prev) => Math.max(prev, idx + 1));
+                    persistTeamDraft(members, teamName);
+                  };
 
-                    return (
-                      <div className="member-inline-form member-inline-form--editing" style={{ borderTop: `3px solid ${tierColor}` }} key={idx}>
-                        <div className="member-inline-header">
-                          <span
-                            className="member-num-circle"
-                            style={{ background: tierColor, color: '#fff', fontSize: '13px', fontWeight: 800 }}
-                          >
-                            {String(idx + 1).padStart(2, '0')}
-                          </span>
-                          <div>
-                            <strong className="member-tier-label">{tierLabel}</strong>
-                            {m.isLead && <span className="lead-tag" style={{ marginLeft: '10px' }}>TEAM LEADER</span>}
-                            <span className="lead-tag" style={{ marginLeft: '10px', background: '#0a0d14' }}>EDITING</span>
-                          </div>
-                          <span className="member-inline-progress">Editing Member {idx + 1} of 6</span>
-                        </div>
+                  const isLastMember = idx === 5;
 
-                        <div className="member-inline-fields">
-                          <div className="form-field-group">
-                            <label className="form-label required">Roll No</label>
-                            <input
-                              type="text"
-                              className={`form-input ${lookupStatuses[idx]?.status === 'found' ? 'form-input--verified' : ''} ${validationErrors[`member_${idx}_rollNo`] ? 'form-input--error' : ''}`}
-                              placeholder="e.g. 22A91A..."
-                              value={m.rollNo}
-                              onChange={(e) => handleMemberChange(idx, 'rollNo', e.target.value.toUpperCase())}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  e.preventDefault();
-                                  triggerStudentLookup(idx, e.currentTarget.value, true);
-                                }
-                              }}
-                              onBlur={(e) => triggerStudentLookup(idx, e.target.value, false)}
-                              autoComplete="off"
-                            />
-                            {lookupStatuses[idx]?.status === 'loading' && (
-                              <span className="lookup-pill lookup-pill--loading">
-                                <span className="lookup-spinner" /> Fetching...
-                              </span>
-                            )}
-                            {lookupStatuses[idx]?.status === 'found' && (
-                              <span className="lookup-pill lookup-pill--found">
-                                ✓ {lookupStatuses[idx].studentName}
-                              </span>
-                            )}
-                            {lookupStatuses[idx]?.status === 'not_found' && (
-                              <span className="lookup-pill lookup-pill--manual">
-                                {lookupStatuses[idx].message || 'Not found — enter manually'}
-                              </span>
-                            )}
-                            {validationErrors[`member_${idx}_rollNo`] && (
-                              <span className="form-error-msg">{validationErrors[`member_${idx}_rollNo`]}</span>
-                            )}
-                          </div>
-
-                          <div className="form-field-group">
-                            <label className="form-label required">Full Name</label>
-                            <input
-                              type="text"
-                              className={`form-input ${validationErrors[`member_${idx}_name`] ? 'form-input--error' : ''}`}
-                              placeholder="Student Full Name"
-                              value={m.name}
-                              onChange={(e) => handleMemberChange(idx, 'name', e.target.value)}
-                              autoComplete="off"
-                            />
-                            {validationErrors[`member_${idx}_name`] && (
-                              <span className="form-error-msg">{validationErrors[`member_${idx}_name`]}</span>
-                            )}
-                          </div>
-
-                          <div className="form-field-group">
-                            <label className="form-label required">Email</label>
-                            <input
-                              type="email"
-                              className={`form-input ${validationErrors[`member_${idx}_email`] ? 'form-input--error' : ''}`}
-                              placeholder="roll@aditya.ac.in"
-                              value={m.email}
-                              onChange={(e) => handleMemberChange(idx, 'email', e.target.value)}
-                              autoComplete="off"
-                            />
-                            {validationErrors[`member_${idx}_email`] && (
-                              <span className="form-error-msg">{validationErrors[`member_${idx}_email`]}</span>
-                            )}
-                          </div>
-
-                          <div className="form-field-group">
-                            <label className="form-label required">Branch</label>
-                            <select
-                              className="form-select"
-                              value={m.branch}
-                              onChange={(e) => handleMemberChange(idx, 'branch', e.target.value)}
-                            >
-                              {branchOptions.map((opt) => (
-                                <option key={opt} value={opt}>{opt}</option>
-                              ))}
-                            </select>
-                          </div>
-
-                          <div className="form-field-group">
-                            <label className="form-label required">Year</label>
-                            <select
-                              className="form-select"
-                              value={m.year}
-                              onChange={(e) => handleMemberChange(idx, 'year', e.target.value)}
-                            >
-                              {YEAR_OPTIONS.map((y) => (
-                                <option key={y} value={y}>{y}</option>
-                              ))}
-                            </select>
-                          </div>
-
-                          <div className="form-field-group">
-                            <label className={`form-label ${m.isLead ? 'required' : ''}`}>
-                              Phone {m.isLead && <span style={{ color: '#ff5500' }}>*</span>}
-                            </label>
-                            <input
-                              type="tel"
-                              className={`form-input ${validationErrors[`member_${idx}_phone`] ? 'form-input--error' : ''}`}
-                              placeholder={m.isLead ? 'Primary contact' : '10-digit (optional)'}
-                              maxLength={10}
-                              value={m.phone}
-                              onChange={(e) => handleMemberChange(idx, 'phone', e.target.value)}
-                            />
-                            {validationErrors[`member_${idx}_phone`] && (
-                              <span className="form-error-msg">{validationErrors[`member_${idx}_phone`]}</span>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="member-inline-actions">
-                          <button
-                            type="button"
-                            className="add-member-btn"
-                            onClick={handleSaveEdit}
-                          >
-                            ✓ Save Changes
-                          </button>
-                          <button
-                            type="button"
-                            className="button secondary"
-                            style={{ minHeight: '44px', padding: '10px 18px', fontSize: '13px' }}
-                            onClick={() => {
-                              setEditingIdx(null);
-                              setValidationErrors((prev) => {
-                                const next = { ...prev };
-                                ['rollNo', 'name', 'email', 'phone'].forEach((f) => delete next[`member_${idx}_${f}`]);
-                                return next;
-                              });
-                            }}
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  }
-
-                  // Closed summary row
-                  const tierColors = { forensic: '#1e3a5f', engineering: '#1a4731', open: '#4a1942' };
-                  const tierLabels = { forensic: 'Forensic', engineering: 'Engineering', open: 'Open' };
                   return (
-                    <div
-                      key={idx}
-                      className="added-member-row"
-                      style={{ borderLeft: `4px solid ${tierColors[m.tier] || '#ff5500'}` }}
-                    >
-                      <span className="added-member-num">{String(idx + 1).padStart(2, '0')}</span>
-                      <div className="added-member-info">
-                        <strong>{m.name || '—'}</strong>
-                        <span>
-                          {m.rollNo || '—'} · {tierLabels[m.tier]} · {m.branch} · {m.year}
-                          {m.phone ? ` · ${m.phone}` : ''}
+                    <div className="member-inline-form" style={{ borderTop: `3px solid ${tierColor}` }}>
+                      <div className="member-inline-header">
+                        <span
+                          className="member-num-circle"
+                          style={{ background: tierColor, color: '#fff', fontSize: '13px', fontWeight: 800 }}
+                        >
+                          {String(idx + 1).padStart(2, '0')}
+                        </span>
+                        <div>
+                          <strong className="member-tier-label">{tierLabel}</strong>
+                          {m.isLead && <span className="lead-tag" style={{ marginLeft: '10px' }}>TEAM LEADER</span>}
+                        </div>
+                        <span className="member-inline-progress">{idx + 1} of 6</span>
+                      </div>
+
+                      <div className="member-inline-fields">
+                        <div className="form-field-group">
+                          <label className="form-label required">Roll No</label>
+                          <input
+                            type="text"
+                            className={`form-input ${lookupStatuses[idx]?.status === 'found' ? 'form-input--verified' : ''} ${validationErrors[`member_${idx}_rollNo`] ? 'form-input--error' : ''}`}
+                            placeholder="e.g. 22A91A..."
+                            value={m.rollNo}
+                            onChange={(e) => handleMemberChange(idx, 'rollNo', e.target.value.toUpperCase())}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                triggerStudentLookup(idx, e.currentTarget.value, true);
+                              }
+                            }}
+                            onBlur={(e) => triggerStudentLookup(idx, e.target.value, false)}
+                            autoComplete="off"
+                          />
+                          {lookupStatuses[idx]?.status === 'loading' && (
+                            <span className="lookup-pill lookup-pill--loading">
+                              <span className="lookup-spinner" /> Fetching...
+                            </span>
+                          )}
+                          {lookupStatuses[idx]?.status === 'found' && (
+                            <span className="lookup-pill lookup-pill--found">
+                              ✓ {lookupStatuses[idx].studentName}
+                            </span>
+                          )}
+                          {lookupStatuses[idx]?.status === 'not_found' && (
+                            <span className="lookup-pill lookup-pill--manual">
+                              {lookupStatuses[idx].message || 'Not found — enter manually'}
+                            </span>
+                          )}
+                          {lookupStatuses[idx]?.status === 'already_registered' && (
+                            <span className="lookup-pill" style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fca5a5', fontWeight: 600 }}>
+                              ⚠️ {lookupStatuses[idx].message || 'Already registered in another team'}
+                            </span>
+                          )}
+                          {validationErrors[`member_${idx}_rollNo`] && (
+                            <span className="form-error-msg">{validationErrors[`member_${idx}_rollNo`]}</span>
+                          )}
+                        </div>
+
+                        <div className="form-field-group">
+                          <label className="form-label required">Full Name</label>
+                          <input
+                            type="text"
+                            className={`form-input ${validationErrors[`member_${idx}_name`] ? 'form-input--error' : ''}`}
+                            placeholder="Student Full Name"
+                            value={m.name}
+                            onChange={(e) => handleMemberChange(idx, 'name', e.target.value)}
+                            autoComplete="off"
+                          />
+                          {validationErrors[`member_${idx}_name`] && (
+                            <span className="form-error-msg">{validationErrors[`member_${idx}_name`]}</span>
+                          )}
+                        </div>
+
+                        <div className="form-field-group">
+                          <label className="form-label required">Email</label>
+                          <input
+                            type="email"
+                            className={`form-input ${validationErrors[`member_${idx}_email`] ? 'form-input--error' : ''}`}
+                            placeholder="roll@aditya.ac.in"
+                            value={m.email}
+                            onChange={(e) => handleMemberChange(idx, 'email', e.target.value)}
+                            autoComplete="off"
+                          />
+                          {validationErrors[`member_${idx}_email`] && (
+                            <span className="form-error-msg">{validationErrors[`member_${idx}_email`]}</span>
+                          )}
+                        </div>
+
+                        <div className="form-field-group">
+                          <label className="form-label required">Branch</label>
+                          <select
+                            className="form-select"
+                            value={m.branch}
+                            onChange={(e) => handleMemberChange(idx, 'branch', e.target.value)}
+                          >
+                            {branchOptions.map((opt) => (
+                              <option key={opt} value={opt}>{opt}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="form-field-group">
+                          <label className="form-label required">Year</label>
+                          <select
+                            className="form-select"
+                            value={m.year}
+                            onChange={(e) => handleMemberChange(idx, 'year', e.target.value)}
+                          >
+                            {YEAR_OPTIONS.map((y) => (
+                              <option key={y} value={y}>{y}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="form-field-group">
+                          <label className={`form-label ${m.isLead ? 'required' : ''}`}>
+                            Phone {m.isLead && <span style={{ color: '#ff5500' }}>*</span>}
+                          </label>
+                          <input
+                            type="tel"
+                            className={`form-input ${validationErrors[`member_${idx}_phone`] ? 'form-input--error' : ''}`}
+                            placeholder={m.isLead ? 'Primary contact' : '10-digit (optional)'}
+                            maxLength={10}
+                            value={m.phone}
+                            onChange={(e) => handleMemberChange(idx, 'phone', e.target.value)}
+                          />
+                          {validationErrors[`member_${idx}_phone`] && (
+                            <span className="form-error-msg">{validationErrors[`member_${idx}_phone`]}</span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="member-inline-actions">
+                        <button
+                          type="button"
+                          className="add-member-btn"
+                          onClick={handleAddMember}
+                        >
+                          {isLastMember ? '✓ Confirm Last Member' : `+ Add Member ${idx + 1} of 6`}
+                        </button>
+                        <span className="add-member-hint">
+                          {isLastMember
+                            ? 'Confirming will complete your 6-member squad.'
+                            : `${5 - idx} more member${5 - idx !== 1 ? 's' : ''} to add after this.`}
                         </span>
                       </div>
-                      {m.isLead && (
-                        <span className="lead-tag" style={{ marginLeft: 'auto', flexShrink: 0 }}>
-                          TEAM LEADER
-                        </span>
-                      )}
-                      <button
-                        type="button"
-                        className="member-edit-btn"
-                        onClick={() => setEditingIdx(idx)}
-                        title={`Edit Member ${idx + 1}`}
-                      >
-                        ✎ Edit
-                      </button>
                     </div>
                   );
-                })}
-              </div>
-            )}
+                })()}
 
-            {/* If currently editing an existing member, show hint */}
-            {editingIdx !== null && confirmedCount < 6 && (
-              <div className="editing-mode-banner">
-                <span>
-                  Currently editing Member 0{editingIdx + 1}. Click <strong>✓ Save Changes</strong> or <strong>Cancel</strong> above to continue adding new members.
-                </span>
-              </div>
-            )}
+                {/* All 6 confirmed notice */}
+                {confirmedCount === 6 && editingIdx === null && (
+                  <div className="all-members-added-notice">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="10" />
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                    All remaining 5 team members completed (6/6 squad). Scroll down to complete Razorpay payment.
+                  </div>
+                )}
 
-            {/* Form to add next new member (shown only when not currently editing an earlier member) */}
-            {confirmedCount < 6 && editingIdx === null && (() => {
-              const idx = confirmedCount;
-              const m = members[idx];
-              const isForensic = m.tier === 'forensic';
-              const isEngineering = m.tier === 'engineering';
-              const branchOptions = isForensic
-                ? FORENSIC_BRANCH_OPTIONS
-                : isEngineering
-                ? ENGINEERING_BRANCH_OPTIONS
-                : OPEN_BRANCH_OPTIONS;
-              const tierLabel = isForensic
-                ? 'Forensic Science / CSDF'
-                : isEngineering
-                ? 'Engineering & Allied'
-                : 'Open Discipline';
-              const tierColor = isForensic ? '#1e3a5f' : isEngineering ? '#1a4731' : '#4a1942';
-
-              const handleAddMember = async () => {
-                const errors = {};
-                if (!m.rollNo.trim()) errors[`member_${idx}_rollNo`] = 'Roll number is required.';
-                if (!m.name.trim()) errors[`member_${idx}_name`] = 'Full name is required.';
-                if (!m.email.trim()) errors[`member_${idx}_email`] = 'Email address is required.';
-                else if (!m.email.includes('@')) errors[`member_${idx}_email`] = 'Enter a valid email address.';
-                if (m.isLead && !m.phone.trim()) errors[`member_${idx}_phone`] = 'Phone number is required for the Team Leader.';
-
-                if (Object.keys(errors).length > 0) {
-                  setValidationErrors((prev) => ({ ...prev, ...errors }));
-                  return;
-                }
-
-                const eligibility = await verifyMemberCanJoinEvent(idx, m.rollNo);
-                if (!eligibility.ok) {
-                  setValidationErrors((prev) => ({
-                    ...prev,
-                    [`member_${idx}_rollNo`]: eligibility.error
-                  }));
-                  return;
-                }
-
-                setValidationErrors((prev) => {
-                  const next = { ...prev };
-                  ['rollNo', 'name', 'email', 'phone'].forEach((f) => delete next[`member_${idx}_${f}`]);
-                  delete next.remainingMembers;
-                  return next;
-                });
-                setConfirmedCount((prev) => Math.max(prev, idx + 1));
-                persistTeamDraft(members, teamName);
-              };
-
-              const isLastMember = idx === 5;
-
-              return (
-                <div className="member-inline-form" style={{ borderTop: `3px solid ${tierColor}` }}>
-                  <div className="member-inline-header">
-                    <span
-                      className="member-num-circle"
-                      style={{ background: tierColor, color: '#fff', fontSize: '13px', fontWeight: 800 }}
-                    >
-                      {String(idx + 1).padStart(2, '0')}
+                {/* Save Team Draft Status & Action Bar */}
+                <div className="team-save-bar">
+                  <div className="team-save-meta">
+                    <span>
+                      Remaining 5 Members Completed: <strong>{remainingFilledCount} / 5</strong>
                     </span>
-                    <div>
-                      <strong className="member-tier-label">{tierLabel}</strong>
-                      {m.isLead && <span className="lead-tag" style={{ marginLeft: '10px' }}>TEAM LEADER</span>}
-                    </div>
-                    <span className="member-inline-progress">{idx + 1} of 6</span>
+                    {saveError && (
+                      <div style={{ color: '#dc2626', marginTop: '4px', fontSize: '12.5px' }}>{saveError}</div>
+                    )}
                   </div>
-
-                  <div className="member-inline-fields">
-                    <div className="form-field-group">
-                      <label className="form-label required">Roll No</label>
-                      <input
-                        type="text"
-                        className={`form-input ${lookupStatuses[idx]?.status === 'found' ? 'form-input--verified' : ''} ${validationErrors[`member_${idx}_rollNo`] ? 'form-input--error' : ''}`}
-                        placeholder="e.g. 22A91A..."
-                        value={m.rollNo}
-                        onChange={(e) => handleMemberChange(idx, 'rollNo', e.target.value.toUpperCase())}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                            triggerStudentLookup(idx, e.currentTarget.value, true);
-                          }
-                        }}
-                        onBlur={(e) => triggerStudentLookup(idx, e.target.value, false)}
-                        autoComplete="off"
-                      />
-                      {lookupStatuses[idx]?.status === 'loading' && (
-                        <span className="lookup-pill lookup-pill--loading">
-                          <span className="lookup-spinner" /> Fetching...
-                        </span>
-                      )}
-                      {lookupStatuses[idx]?.status === 'found' && (
-                        <span className="lookup-pill lookup-pill--found">
-                          ✓ {lookupStatuses[idx].studentName}
-                        </span>
-                      )}
-                      {lookupStatuses[idx]?.status === 'not_found' && (
-                        <span className="lookup-pill lookup-pill--manual">
-                          {lookupStatuses[idx].message || 'Not found — enter manually'}
-                        </span>
-                      )}
-                      {validationErrors[`member_${idx}_rollNo`] && (
-                        <span className="form-error-msg">{validationErrors[`member_${idx}_rollNo`]}</span>
-                      )}
-                    </div>
-
-                    <div className="form-field-group">
-                      <label className="form-label required">Full Name</label>
-                      <input
-                        type="text"
-                        className={`form-input ${validationErrors[`member_${idx}_name`] ? 'form-input--error' : ''}`}
-                        placeholder="Student Full Name"
-                        value={m.name}
-                        onChange={(e) => handleMemberChange(idx, 'name', e.target.value)}
-                        autoComplete="off"
-                      />
-                      {validationErrors[`member_${idx}_name`] && (
-                        <span className="form-error-msg">{validationErrors[`member_${idx}_name`]}</span>
-                      )}
-                    </div>
-
-                    <div className="form-field-group">
-                      <label className="form-label required">Email</label>
-                      <input
-                        type="email"
-                        className={`form-input ${validationErrors[`member_${idx}_email`] ? 'form-input--error' : ''}`}
-                        placeholder="roll@aditya.ac.in"
-                        value={m.email}
-                        onChange={(e) => handleMemberChange(idx, 'email', e.target.value)}
-                        autoComplete="off"
-                      />
-                      {validationErrors[`member_${idx}_email`] && (
-                        <span className="form-error-msg">{validationErrors[`member_${idx}_email`]}</span>
-                      )}
-                    </div>
-
-                    <div className="form-field-group">
-                      <label className="form-label required">Branch</label>
-                      <select
-                        className="form-select"
-                        value={m.branch}
-                        onChange={(e) => handleMemberChange(idx, 'branch', e.target.value)}
-                      >
-                        {branchOptions.map((opt) => (
-                          <option key={opt} value={opt}>{opt}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="form-field-group">
-                      <label className="form-label required">Year</label>
-                      <select
-                        className="form-select"
-                        value={m.year}
-                        onChange={(e) => handleMemberChange(idx, 'year', e.target.value)}
-                      >
-                        {YEAR_OPTIONS.map((y) => (
-                          <option key={y} value={y}>{y}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="form-field-group">
-                      <label className={`form-label ${m.isLead ? 'required' : ''}`}>
-                        Phone {m.isLead && <span style={{ color: '#ff5500' }}>*</span>}
-                      </label>
-                      <input
-                        type="tel"
-                        className={`form-input ${validationErrors[`member_${idx}_phone`] ? 'form-input--error' : ''}`}
-                        placeholder={m.isLead ? 'Primary contact' : '10-digit (optional)'}
-                        maxLength={10}
-                        value={m.phone}
-                        onChange={(e) => handleMemberChange(idx, 'phone', e.target.value)}
-                      />
-                      {validationErrors[`member_${idx}_phone`] && (
-                        <span className="form-error-msg">{validationErrors[`member_${idx}_phone`]}</span>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="member-inline-actions">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
                     <button
                       type="button"
-                      className="add-member-btn"
-                      onClick={handleAddMember}
+                      className="button secondary"
+                      style={{ minHeight: '40px', padding: '8px 16px', fontSize: '13px', borderColor: '#ff5500', color: '#c2410c' }}
+                      disabled={savingDraft}
+                      onClick={async () => {
+                        await persistTeamDraft(members, teamName);
+                        handleLogout();
+                      }}
                     >
-                      {isLastMember ? '✓ Confirm Last Member' : `+ Add Member ${idx + 1} of 6`}
+                      Save &amp; Logout (Pay Later) ↪
                     </button>
-                    <span className="add-member-hint">
-                      {isLastMember
-                        ? 'Confirming will complete your 6-member squad.'
-                        : `${5 - idx} more member${5 - idx !== 1 ? 's' : ''} to add after this.`}
-                    </span>
                   </div>
                 </div>
-              );
-            })()}
-
-            {/* All 6 confirmed notice */}
-            {confirmedCount === 6 && editingIdx === null && (
-              <div className="all-members-added-notice">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="10" />
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
-                All remaining 5 team members completed (6/6 squad). Scroll down to complete Razorpay payment.
               </div>
-            )}
 
-            {/* Save Team Draft Status & Action Bar */}
-            <div className="team-save-bar">
-              <div className="team-save-meta">
-                <span>
-                  Remaining 5 Members Completed: <strong>{remainingFilledCount} / 5</strong>
-                </span>
-                {saveError && (
-                  <div style={{ color: '#dc2626', marginTop: '4px', fontSize: '12.5px' }}>{saveError}</div>
-                )}
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                <button
-                  type="button"
-                  className="button secondary"
-                  style={{ minHeight: '40px', padding: '8px 16px', fontSize: '13px', borderColor: '#ff5500', color: '#c2410c' }}
-                  disabled={savingDraft}
-                  onClick={async () => {
-                    await persistTeamDraft(members, teamName);
-                    handleLogout();
-                  }}
-                >
-                  Save &amp; Logout (Pay Later) ↪
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* STEP 3: Razorpay Payment Gateway & Submission */}
-          <div className="form-card-section" id="payment-step-section" ref={paymentSectionRef}>
-            <div className="form-card-header">
-              <span className="step-num-badge">STEP 03</span>
-              <div>
-                <h2 className="form-section-title">Online Payment &amp; Submission</h2>
-                <p className="form-section-desc">
-                  Registration fee is ₹{effectiveFeeAmount} per team. Payment is enabled only after all remaining 5 team members are filled.
-                </p>
-              </div>
-            </div>
-
-            <div className={`payment-gate-banner ${allRemainingFiveFilled ? 'payment-gate-banner--unlocked' : 'payment-gate-banner--locked'}`} data-error-key="remainingMembers">
-              {syncingTeamState ? (
-                <span>⏳ Loading your saved team members from the database...</span>
-              ) : allRemainingFiveFilled ? (
-                <span>
-                  ✓ All 6 team members are already saved in the database! No need to re-fill participants — Razorpay payment is unlocked and ready.
-                </span>
-              ) : (
-                <span>
-                  🔒 Payment disabled: Please fill and confirm all <strong>5 remaining team members</strong> in Step 02 ({remainingFilledCount}/5 completed) to enable Razorpay payment.
-                </span>
-              )}
-            </div>
-
-            <div className="payment-gateway-container">
-              <div className="payment-summary-box">
-                <div className="gateway-badge-row">
-                  <span className="gateway-badge">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="1" y="4" width="22" height="16" rx="2" ry="2" />
-                      <line x1="1" y1="10" x2="23" y2="10" />
-                    </svg>
-                    SECURED BY RAZORPAY
-                  </span>
-                  <span className="fee-tag">₹{effectiveFeeAmount}.00 · TEAM REGISTRATION</span>
-                </div>
-
-                <div className="payment-details-row">
+              {/* STEP 3: Razorpay Payment Gateway & Submission */}
+              <div className="form-card-section" id="payment-step-section" ref={paymentSectionRef}>
+                <div className="form-card-header">
+                  <span className="step-num-badge">STEP 03</span>
                   <div>
-                    <span className="pay-label">EVENT REGISTRATION</span>
-                    <h3 className="pay-title">FORENSITHON 2k26 · Six Builders Squad</h3>
-                    <p className="pay-desc">
-                      One payment of ₹{effectiveFeeAmount} covers all 6 registered team members. Instant online verification.
+                    <h2 className="form-section-title">Online Payment &amp; Submission</h2>
+                    <p className="form-section-desc">
+                      Registration fee is ₹{effectiveFeeAmount} per team. Payment is enabled only after all remaining 5 team members are filled.
                     </p>
                   </div>
-                  <div className="payment-amount-display">
-                    <span className="amount-currency">INR</span>
-                    <strong className="amount-number">₹{effectiveFeeAmount}</strong>
-                    <span className="amount-sub">Fixed team fee</span>
-                  </div>
                 </div>
 
-                <div className="payment-methods-strip">
-                  <span className="methods-label">Accepted Payment Modes:</span>
-                  <div className="methods-pills">
-                    <span className="method-pill">UPI (GPay / PhonePe / Paytm / BHIM)</span>
-                    <span className="method-pill">Credit &amp; Debit Cards</span>
-                    <span className="method-pill">Net Banking</span>
-                    <span className="method-pill">Wallets</span>
+                <div className={`payment-gate-banner ${allRemainingFiveFilled ? 'payment-gate-banner--unlocked' : 'payment-gate-banner--locked'}`} data-error-key="remainingMembers">
+                  {syncingTeamState ? (
+                    <span>⏳ Loading your saved team members from the database...</span>
+                  ) : allRemainingFiveFilled ? (
+                    <span>
+                      ✓ All 6 team members are already saved in the database! No need to re-fill participants — Razorpay payment is unlocked and ready.
+                    </span>
+                  ) : (
+                    <span>
+                      🔒 Payment disabled: Please fill and confirm all <strong>5 remaining team members</strong> in Step 02 ({remainingFilledCount}/5 completed) to enable Razorpay payment.
+                    </span>
+                  )}
+                </div>
+
+                <div className="payment-gateway-container">
+                  <div className="payment-summary-box">
+                    <div className="gateway-badge-row">
+                      <span className="gateway-badge">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="1" y="4" width="22" height="16" rx="2" ry="2" />
+                          <line x1="1" y1="10" x2="23" y2="10" />
+                        </svg>
+                        SECURED BY RAZORPAY
+                      </span>
+                      <span className="fee-tag">₹{effectiveFeeAmount}.00 · TEAM REGISTRATION</span>
+                    </div>
+
+                    <div className="payment-details-row">
+                      <div>
+                        <span className="pay-label">EVENT REGISTRATION</span>
+                        <h3 className="pay-title">FORENSITHON 2k26 · Six Builders Squad</h3>
+                        <p className="pay-desc">
+                          One payment of ₹{effectiveFeeAmount} covers all 6 registered team members. Instant online verification.
+                        </p>
+                      </div>
+                      <div className="payment-amount-display">
+                        <span className="amount-currency">INR</span>
+                        <strong className="amount-number">₹{effectiveFeeAmount}</strong>
+                        <span className="amount-sub">Fixed team fee</span>
+                      </div>
+                    </div>
+
+                    <div className="payment-methods-strip">
+                      <span className="methods-label">Accepted Payment Modes:</span>
+                      <div className="methods-pills">
+                        <span className="method-pill">UPI (GPay / PhonePe / Paytm / BHIM)</span>
+                        <span className="method-pill">Credit &amp; Debit Cards</span>
+                        <span className="method-pill">Net Banking</span>
+                        <span className="method-pill">Wallets</span>
+                      </div>
+                    </div>
                   </div>
+
+                  <div className="payment-terms-box">
+                    <label className="checkbox-container">
+                      <input
+                        type="checkbox"
+                        checked={agreed}
+                        onChange={(e) => {
+                          setAgreed(e.target.checked);
+                          if (validationErrors.agreed) {
+                            setValidationErrors((prev) => {
+                              const copy = { ...prev };
+                              delete copy.agreed;
+                              return copy;
+                            });
+                          }
+                        }}
+                        data-error-key="agreed"
+                      />
+                      <span className="checkbox-custom" />
+                      <span className="checkbox-label-text">
+                        I certify that all 6 team members are currently enrolled students of Aditya University, and strictly comply with the rule: <strong>2 Forensic Science/CSDF, 2 Engineering, and 2 from any department</strong>.
+                      </span>
+                    </label>
+                    {validationErrors.agreed && (
+                      <span className="form-error-msg" style={{ display: 'block', marginTop: '6px' }}>
+                        {validationErrors.agreed}
+                      </span>
+                    )}
+                  </div>
+
+                  {paymentErrorMessage && (
+                    <div className="payment-error-alert" role="alert">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="10" />
+                        <line x1="12" y1="8" x2="12" y2="12" />
+                        <line x1="12" y1="16" x2="12.01" y2="16" />
+                      </svg>
+                      <span>{paymentErrorMessage}</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="form-submit-row">
+                  <button
+                    type="submit"
+                    className="button submit-registration-btn"
+                    disabled={!allRemainingFiveFilled || isProcessingPayment}
+                  >
+                    {isProcessingPayment ? (
+                      <span className="btn-loading-flex">
+                        <span className="spinner" />{' '}
+                        {paymentStage === 'verifying'
+                          ? 'Verifying Payment & Confirming Team...'
+                          : paymentStage === 'awaiting_checkout'
+                            ? 'Waiting for Razorpay Payment...'
+                            : 'Connecting to Razorpay Gateway...'}
+                      </span>
+                    ) : !allRemainingFiveFilled ? (
+                      `Pay ₹${effectiveFeeAmount} Disabled (${remainingFilledCount}/5 Remaining Members Filled)`
+                    ) : (
+                      `Pay ₹${effectiveFeeAmount} via Razorpay & Complete Registration →`
+                    )}
+                  </button>
+                  <p className="submit-hint">
+                    {allRemainingFiveFilled
+                      ? '⚠️ Please wait until payment verification completes. Do NOT refresh, press Back, or close this page until your confirmation slip is displayed.'
+                      : 'Complete all remaining 5 members above in Step 02 to unlock the Razorpay payment button.'}
+                  </p>
                 </div>
               </div>
-
-              <div className="payment-terms-box">
-                <label className="checkbox-container">
-                  <input
-                    type="checkbox"
-                    checked={agreed}
-                    onChange={(e) => {
-                      setAgreed(e.target.checked);
-                      if (validationErrors.agreed) {
-                        setValidationErrors((prev) => {
-                          const copy = { ...prev };
-                          delete copy.agreed;
-                          return copy;
-                        });
-                      }
-                    }}
-                    data-error-key="agreed"
-                  />
-                  <span className="checkbox-custom" />
-                  <span className="checkbox-label-text">
-                    I certify that all 6 team members are currently enrolled students of Aditya University, and strictly comply with the rule: <strong>2 Forensic Science/CSDF, 2 Engineering, and 2 from any department</strong>.
-                  </span>
-                </label>
-                {validationErrors.agreed && (
-                  <span className="form-error-msg" style={{ display: 'block', marginTop: '6px' }}>
-                    {validationErrors.agreed}
-                  </span>
-                )}
-              </div>
-
-              {paymentErrorMessage && (
-                <div className="payment-error-alert" role="alert">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="10" />
-                    <line x1="12" y1="8" x2="12" y2="12" />
-                    <line x1="12" y1="16" x2="12.01" y2="16" />
-                  </svg>
-                  <span>{paymentErrorMessage}</span>
-                </div>
-              )}
-            </div>
-
-            <div className="form-submit-row">
-              <button
-                type="submit"
-                className="button submit-registration-btn"
-                disabled={!allRemainingFiveFilled || isProcessingPayment}
-              >
-                {isProcessingPayment ? (
-                  <span className="btn-loading-flex">
-                    <span className="spinner" />{' '}
-                    {paymentStage === 'verifying'
-                      ? 'Verifying Payment & Confirming Team...'
-                      : paymentStage === 'awaiting_checkout'
-                      ? 'Waiting for Razorpay Payment...'
-                      : 'Connecting to Razorpay Gateway...'}
-                  </span>
-                ) : !allRemainingFiveFilled ? (
-                  `Pay ₹${effectiveFeeAmount} Disabled (${remainingFilledCount}/5 Remaining Members Filled)`
-                ) : (
-                  `Pay ₹${effectiveFeeAmount} via Razorpay & Complete Registration →`
-                )}
-              </button>
-              <p className="submit-hint">
-                {allRemainingFiveFilled
-                  ? '⚠️ Please wait until payment verification completes. Do NOT refresh, press Back, or close this page until your confirmation slip is displayed.'
-                  : 'Complete all remaining 5 members above in Step 02 to unlock the Razorpay payment button.'}
-              </p>
-            </div>
-          </div>
-        </form>
+            </form>
           </>
         )}
       </section>
@@ -2774,24 +2841,24 @@ export default function RegistrationPage() {
               {paymentStage === 'verifying'
                 ? 'STEP 3 OF 3 · VERIFYING TRANSACTION'
                 : paymentStage === 'awaiting_checkout'
-                ? 'STEP 2 OF 3 · PAYMENT IN PROGRESS'
-                : 'STEP 1 OF 3 · INITIATING PAYMENT'}
+                  ? 'STEP 2 OF 3 · PAYMENT IN PROGRESS'
+                  : 'STEP 1 OF 3 · INITIATING PAYMENT'}
             </span>
 
             <h2 className="payment-overlay-title">
               {paymentStage === 'verifying'
                 ? 'Verifying Payment & Confirming Registration...'
                 : paymentStage === 'awaiting_checkout'
-                ? 'Waiting for Payment Completion...'
-                : 'Connecting to Razorpay Gateway...'}
+                  ? 'Waiting for Payment Completion...'
+                  : 'Connecting to Razorpay Gateway...'}
             </h2>
 
             <p className="payment-overlay-subtitle">
               {paymentStage === 'verifying'
                 ? 'Your payment has been received. Please wait while we verify your transaction with Razorpay and generate your official Forensithon registration receipt.'
                 : paymentStage === 'awaiting_checkout'
-                ? 'Complete your payment in the Razorpay window. Once paid, this screen will automatically verify and confirm your team registration.'
-                : 'Fetching official event fee from server and creating your secure Razorpay order.'}
+                  ? 'Complete your payment in the Razorpay window. Once paid, this screen will automatically verify and confirm your team registration.'
+                  : 'Fetching official event fee from server and creating your secure Razorpay order.'}
             </p>
 
             <div className="payment-do-not-refresh-box">
