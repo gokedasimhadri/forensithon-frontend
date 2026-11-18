@@ -711,6 +711,22 @@ export async function fetchStudentDashboardData(rollNo, typeCode = EVENT_TYPE) {
 }
 
 /**
+ * Check if any of the given roll numbers are already registered (CONFIRMED/PAID) for the same Forensithon event
+ */
+export async function checkForensithonMembersEligibility(payload) {
+  const res = await apiFetch('/api/forensithon/check-members', {
+    method: 'POST',
+    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(payload)
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok || !json.success) {
+    throw new Error(json.error || json.message || 'Unable to verify member eligibility.');
+  }
+  return json;
+}
+
+/**
  * Save Team Name, Team Leader, and Remaining Members to central_event_student_registrations
  */
 export async function saveTeamMembersDraft(payload) {

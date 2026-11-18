@@ -9,6 +9,7 @@ import {
   registerTeamLeaderAccount,
   loginTeamLeaderAccount,
   fetchTeamLeaderState,
+  checkForensithonMembersEligibility,
   saveTeamMembersDraft,
   createForensithonOrder,
   verifyForensithonPayment
@@ -985,6 +986,54 @@ export default function RegistrationPage() {
     }
   };
 
+  // Check that a member's Roll No is neither duplicated within this 6-member team
+  // nor already CONFIRMED/PAID in another team for the SAME Forensithon event.
+  const verifyMemberCanJoinEvent = async (memberIdx, rawRoll) => {
+    const cleanRoll = String(rawRoll || '').trim().toUpperCase();
+    if (!cleanRoll) return { ok: false, error: 'Roll number is required.' };
+
+    // 1. Check duplicate inside the same 6-member squad
+    const duplicateSlotIdx = members.findIndex(
+      (other, i) =>
+        i !== memberIdx &&
+        (i < confirmedCount || i === 0) &&
+        String(other.rollNo || '').trim().toUpperCase() === cleanRoll
+    );
+    if (duplicateSlotIdx !== -1) {
+      return {
+        ok: false,
+        error: `Roll Number ${cleanRoll} is already added as Member ${duplicateSlotIdx + 1}. All 6 team members must be unique.`
+      };
+    }
+
+    // 2. Check server DB for existing CONFIRMED/PAID registration for the SAME event
+    if (currentChallenge) {
+      try {
+        const res = await checkForensithonMembersEligibility({
+          rollNumbers: [cleanRoll],
+          centralEventId: currentChallenge.sourceType === 'central_event' ? currentChallenge._id : null,
+          eventTitle: currentChallenge.rawTitle || currentChallenge.title,
+          challengeTitle: currentChallenge.title,
+          challengeId: currentChallenge.id,
+          slug: currentChallenge.slug || ''
+        });
+        if (res && res.available === false) {
+          return {
+            ok: false,
+            error:
+              res.message ||
+              `Roll Number ${cleanRoll} is already registered for "${currentChallenge.title}". Same member cannot register again for the same event.`
+          };
+        }
+      } catch (err) {
+        // Backend will still enforce authoritatively on save-team & create-order
+        console.warn('Member eligibility check notice:', err.message);
+      }
+    }
+
+    return { ok: true };
+  };
+
   const validateForm = () => {
     const errors = {};
 
@@ -996,10 +1045,16 @@ export default function RegistrationPage() {
       errors.challenge = 'Please select an active track and problem statement.';
     }
 
-    // Validate 6 members (Team Leader + remaining 5 members)
+    // Validate 6 members (Team Leader + remaining 5 members) & block duplicate roll numbers
+    const seenRolls = new Map();
     members.forEach((m, idx) => {
-      if (!m.rollNo.trim()) {
+      const cleanRoll = String(m.rollNo || '').trim().toUpperCase();
+      if (!cleanRoll) {
         errors[`member_${idx}_rollNo`] = `Roll number is required.`;
+      } else if (seenRolls.has(cleanRoll)) {
+        errors[`member_${idx}_rollNo`] = `Duplicate Roll Number (${cleanRoll}) already used in Member ${seenRolls.get(cleanRoll) + 1}.`;
+      } else {
+        seenRolls.set(cleanRoll, idx);
       }
       if (!m.name.trim()) {
         errors[`member_${idx}_name`] = `Student ${idx + 1} name is required.`;
@@ -2092,7 +2147,7 @@ export default function RegistrationPage() {
 
                   // If this member is currently being edited, render its open form in-place!
                   if (editingIdx === idx) {
-                    const handleSaveEdit = () => {
+                    const handleSaveEdit = async () => {
                       const errors = {};
                       if (!m.rollNo.trim()) errors[`member_${idx}_rollNo`] = 'Roll number is required.';
                       if (!m.name.trim()) errors[`member_${idx}_name`] = 'Full name is required.';
@@ -2102,6 +2157,15 @@ export default function RegistrationPage() {
 
                       if (Object.keys(errors).length > 0) {
                         setValidationErrors((prev) => ({ ...prev, ...errors }));
+                        return;
+                      }
+
+                      const eligibility = await verifyMemberCanJoinEvent(idx, m.rollNo);
+                      if (!eligibility.ok) {
+                        setValidationErrors((prev) => ({
+                          ...prev,
+                          [`member_${idx}_rollNo`]: eligibility.error
+                        }));
                         return;
                       }
 
@@ -2334,7 +2398,7 @@ export default function RegistrationPage() {
                 : 'Open Discipline';
               const tierColor = isForensic ? '#1e3a5f' : isEngineering ? '#1a4731' : '#4a1942';
 
-              const handleAddMember = () => {
+              const handleAddMember = async () => {
                 const errors = {};
                 if (!m.rollNo.trim()) errors[`member_${idx}_rollNo`] = 'Roll number is required.';
                 if (!m.name.trim()) errors[`member_${idx}_name`] = 'Full name is required.';
@@ -2344,6 +2408,15 @@ export default function RegistrationPage() {
 
                 if (Object.keys(errors).length > 0) {
                   setValidationErrors((prev) => ({ ...prev, ...errors }));
+                  return;
+                }
+
+                const eligibility = await verifyMemberCanJoinEvent(idx, m.rollNo);
+                if (!eligibility.ok) {
+                  setValidationErrors((prev) => ({
+                    ...prev,
+                    [`member_${idx}_rollNo`]: eligibility.error
+                  }));
                   return;
                 }
 

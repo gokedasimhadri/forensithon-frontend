@@ -397,26 +397,47 @@ export default function AccountDashboardPage() {
 
                         <div className="receipt-section">
                           <span className="receipt-subheading">REGISTERED SQUAD ({participants.length} MEMBERS)</span>
-                          <div className="receipt-members-grid">
-                            {participants.map((m, mIdx) => (
-                              <div key={mIdx} className={`receipt-member-item receipt-member-item--${m.tier || (mIdx < 2 ? 'forensic' : mIdx < 4 ? 'engineering' : 'open')}`}>
-                                <div className="receipt-member-top">
-                                  <span className="receipt-member-role">
-                                    {m.isLeader ? 'Team Leader' : (m.role || `Member ${mIdx + 1}`)}
-                                  </span>
-                                  <span className="receipt-member-tier-pill">
-                                    #{m.no || mIdx + 1}
-                                  </span>
-                                </div>
-                                <span className="receipt-member-roll-badge">{m.rollNumber || m.rollNo || m.roll}</span>
-                                <h4 className="receipt-member-name">{m.name}</h4>
-                                <p className="receipt-member-details">
-                                  <span><strong>Dept:</strong> {m.department || m.branch || '—'} ({m.year || '—'})</span>
-                                  <span><strong>Email:</strong> {m.email || '—'}</span>
-                                  {m.phone && <span><strong>Mobile:</strong> {m.phone}</span>}
-                                </p>
-                              </div>
-                            ))}
+                          <div className="account-members-table-wrap">
+                            <table className="account-members-table">
+                              <thead>
+                                <tr>
+                                  <th scope="col" className="col-sl">#</th>
+                                  <th scope="col" className="col-roll">Roll Number</th>
+                                  <th scope="col" className="col-name">Name</th>
+                                  <th scope="col" className="col-role">Role</th>
+                                  <th scope="col" className="col-dept">Department / Year</th>
+                                  <th scope="col" className="col-email">Email</th>
+                                  <th scope="col" className="col-mobile">Mobile</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {participants.map((m, mIdx) => {
+                                  const isLeadRow = Boolean(m.isLeader || mIdx === 0);
+                                  const rollVal = m.rollNumber || m.rollNo || m.roll || '—';
+                                  return (
+                                    <tr key={mIdx} className={isLeadRow ? 'member-row--leader' : ''}>
+                                      <td className="cell-sl">{m.no || mIdx + 1}</td>
+                                      <td className="cell-roll">
+                                        <span className="table-roll-badge">{rollVal}</span>
+                                      </td>
+                                      <td className="cell-name">
+                                        <strong>{m.name || '—'}</strong>
+                                        {isLeadRow && <span className="table-lead-pill">LEADER</span>}
+                                      </td>
+                                      <td className="cell-role">
+                                        {isLeadRow ? 'Team Leader' : (m.role || `Member ${mIdx + 1}`)}
+                                      </td>
+                                      <td className="cell-dept">
+                                        <span>{m.department || m.branch || '—'}</span>
+                                        {m.year && <span className="table-year-sub"> ({m.year})</span>}
+                                      </td>
+                                      <td className="cell-email">{m.email || '—'}</td>
+                                      <td className="cell-mobile">{m.phone || m.mobile || '—'}</td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
                           </div>
                         </div>
 
