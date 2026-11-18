@@ -5631,6 +5631,712 @@ main {
   white-space: nowrap;
 }
 
+.account-members-table th.col-pass,
+.account-members-table td.cell-pass {
+  text-align: center;
+  white-space: nowrap;
+}
+
+.table-view-pass-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 5px 11px;
+  background: #0d3b66;
+  color: #ffffff;
+  border: 1px solid #0d3b66;
+  border-radius: 6px;
+  font-family: var(--font-tech);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.16s ease;
+}
+
+.table-view-pass-btn:hover {
+  background: var(--orange);
+  border-color: var(--orange);
+  color: #ffffff;
+  transform: translateY(-1px);
+  box-shadow: 0 3px 10px rgba(255, 85, 0, 0.25);
+}
+
+/* ==========================================================================
+   Participant Entry Pass Popup Modal & Credential Card (Reference Image 2)
+   ========================================================================== */
+
+.pass-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: rgba(10, 16, 30, 0.74);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  animation: paymentOverlayFade 0.18s ease-out;
+}
+
+.pass-modal-shell {
+  width: 100%;
+  max-width: 860px;
+  max-height: 94vh;
+  background: #f1f5f9;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 20px;
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.42);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.pass-modal-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 20px;
+  background: #ffffff;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.pass-modal-topbar-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-display);
+  font-size: 15px;
+  color: #0f172a;
+  flex-wrap: wrap;
+}
+
+.pass-modal-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #0d8a55;
+  flex-shrink: 0;
+}
+
+.pass-modal-sub {
+  font-size: 13px;
+  font-weight: 500;
+  color: #64748b;
+}
+
+.pass-modal-close-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+
+.pass-modal-close-btn:hover {
+  background: #0f172a;
+  border-color: #0f172a;
+  color: #ffffff;
+}
+
+.pass-modal-scroll-area {
+  padding: 20px;
+  overflow: auto;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  background: #e2e8f0;
+}
+
+.pass-modal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 14px 20px;
+  background: #ffffff;
+  border-top: 1px solid #e2e8f0;
+  flex-wrap: wrap;
+}
+
+/* Exact Credential Pass Card matching Reference Image 2 */
+.fpass-card {
+  width: 780px;
+  min-width: 780px;
+  background: #ffffff;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 12px 32px rgba(11, 30, 59, 0.18);
+  border: 1px solid #cbd5e1;
+  font-family: var(--font-body);
+  color: #0f172a;
+}
+
+.fpass-header {
+  background: linear-gradient(95deg, #091a34 0%, #0e2850 52%, #14396e 100%);
+  border-bottom: 2.5px solid #d4a63a;
+  padding: 14px 22px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.fpass-header-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+
+.fpass-emblem-ring {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1.5px solid #d4a63a;
+  background: rgba(255, 255, 255, 0.08);
+  padding: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.fpass-emblem-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 50%;
+}
+
+.fpass-brand-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+}
+
+.fpass-brand-line1 {
+  font-family: var(--font-display);
+  font-size: 14.5px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: #e6be53;
+}
+
+.fpass-brand-line2 {
+  font-family: var(--font-tech);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: #d6dfec;
+  margin-top: 2px;
+}
+
+.fpass-header-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.fpass-title-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 22px;
+  border-radius: 999px;
+  border: 1.3px solid #d4a63a;
+  background: rgba(212, 166, 58, 0.14);
+  color: #f2c94c;
+  font-family: var(--font-display);
+  font-size: 16.5px;
+  font-weight: 900;
+  letter-spacing: 1.6px;
+  white-space: nowrap;
+}
+
+.fpass-star {
+  color: #f2c94c;
+  font-size: 14px;
+}
+
+.fpass-credential-sub {
+  margin-top: 5px;
+  font-family: var(--font-tech);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: #e2e8f0;
+  text-transform: uppercase;
+}
+
+.fpass-team-box {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  padding: 7px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.07);
+  min-width: 148px;
+}
+
+.fpass-team-label {
+  font-family: var(--font-tech);
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 1.3px;
+  color: #cbd5e1;
+  text-transform: uppercase;
+}
+
+.fpass-team-value {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  font-weight: 800;
+  color: #f2c94c;
+  letter-spacing: 0.4px;
+  margin-top: 2px;
+}
+
+/* Middle Body */
+.fpass-body {
+  display: grid;
+  grid-template-columns: 186px 1fr;
+  padding: 20px 24px 16px;
+  background: #ffffff;
+}
+
+.fpass-left-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding-right: 20px;
+  border-right: 1px solid #e2e8f0;
+}
+
+.fpass-photo-frame {
+  width: 114px;
+  height: 132px;
+  border-radius: 12px;
+  border: 2px solid #0f2544;
+  background: #f1f5f9;
+  overflow: hidden;
+  box-shadow: 0 3px 10px rgba(15, 37, 68, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fpass-photo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+  display: block;
+}
+
+.fpass-photo-fallback {
+  width: 100%;
+  height: 100%;
+  background: #dbeafe;
+  color: #2563eb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fpass-role-pill {
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-family: var(--font-tech);
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+  color: #ffffff;
+  white-space: nowrap;
+}
+
+.fpass-role-pill--lead {
+  background: #0d8a55;
+}
+
+.fpass-role-pill--member {
+  background: #0d3b66;
+}
+
+.fpass-verified-box {
+  width: 100%;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 8px 10px;
+  text-align: center;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04);
+}
+
+.fpass-verified-top {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  font-family: var(--font-tech);
+  font-size: 10.5px;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: 0.5px;
+}
+
+.fpass-verified-bottom {
+  margin-top: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  font-family: var(--font-tech);
+  font-size: 9.5px;
+  font-weight: 800;
+  color: #0d8a55;
+  letter-spacing: 0.5px;
+}
+
+.fpass-verified-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #0d8a55;
+}
+
+.fpass-right-col {
+  padding-left: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  justify-content: center;
+}
+
+.fpass-event-title {
+  font-family: var(--font-display);
+  font-size: 19px;
+  font-weight: 900;
+  color: #0f2544;
+  line-height: 1.24;
+  margin: 0;
+  letter-spacing: -0.2px;
+  text-transform: uppercase;
+}
+
+.fpass-date-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  align-self: flex-start;
+  padding: 5px 12px;
+  border-radius: 7px;
+  background: #fef3c7;
+  border: 1px solid #f5d77f;
+  color: #92400e;
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.fpass-details-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px 16px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 13px 15px;
+}
+
+.fpass-detail-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.fpass-detail-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.fpass-detail-icon--blue {
+  background: #e0f2fe;
+  color: #2563eb;
+}
+
+.fpass-detail-icon--dark {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+.fpass-detail-icon--amber {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.fpass-detail-icon--purple {
+  background: #f3e8ff;
+  color: #9333ea;
+}
+
+.fpass-detail-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.fpass-detail-label {
+  font-family: var(--font-tech);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.9px;
+  color: #64748b;
+  text-transform: uppercase;
+}
+
+.fpass-detail-value {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 800;
+  color: #0f172a;
+  line-height: 1.3;
+  word-break: break-word;
+}
+
+.fpass-venue-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  border-radius: 8px;
+  background: #fef9e7;
+  border: 1px solid #f5d77f;
+  color: #92400e;
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+}
+
+/* Ticket Perforation Divider */
+.fpass-perforation {
+  position: relative;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  background: #ffffff;
+}
+
+.fpass-dashed-line {
+  width: 100%;
+  border-top: 2px dashed #cbd5e1;
+}
+
+.fpass-notch {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #e2e8f0;
+  border: 1px solid #cbd5e1;
+}
+
+.fpass-notch--left {
+  left: -11px;
+}
+
+.fpass-notch--right {
+  right: -11px;
+}
+
+/* Bottom Scannable Code128 Barcode Section */
+.fpass-barcode-section {
+  padding: 6px 24px 16px;
+  background: #ffffff;
+}
+
+.fpass-barcode-box {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 8px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.fpass-barcode-img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+}
+
+.fpass-barcode-fallback {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-weight: 800;
+  padding: 20px;
+}
+
+.fpass-footer-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.fpass-footer-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-tech);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: #0f2544;
+  text-transform: uppercase;
+}
+
+.fpass-footer-code {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  color: #0f2544;
+}
+
+.fpass-footer-right {
+  font-family: var(--font-tech);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.9px;
+  color: #64748b;
+  text-transform: uppercase;
+}
+
+/* ==========================================================================
+   Already Registered & Paid Event Lock Badges (Challenges & Registration)
+   ========================================================================== */
+
+.challenge-feed-card--paid {
+  border-color: #86efac !important;
+  background: linear-gradient(180deg, #f0fdf4 0%, #ffffff 34%);
+}
+
+.feed-card-paid-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 9px;
+  background: #dcfce7;
+  color: #166534;
+  border: 1.5px solid #86efac;
+  font-family: var(--font-tech);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  white-space: nowrap;
+  cursor: not-allowed;
+  user-select: none;
+}
+
+.feed-footer-link--paid {
+  color: #15803d !important;
+  font-weight: 800;
+}
+
+.feed-footer-link--paid:hover {
+  color: #166534 !important;
+  text-decoration: underline;
+}
+
+.event-paid-lock-banner {
+  margin-top: 18px;
+  padding: 20px 22px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%);
+  border: 1.5px solid #86efac;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.event-paid-lock-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.event-paid-lock-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: #16a34a;
+  color: #ffffff;
+  font-family: var(--font-tech);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.7px;
+}
+
+.event-paid-lock-team {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: #166534;
+}
+
+.event-paid-lock-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 800;
+  color: #0f2544;
+  line-height: 1.3;
+}
+
+.event-paid-lock-desc {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: #334155;
+}
+
+.event-paid-lock-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 6px;
+}
+
 @media print {
   .account-members-table-wrap {
     overflow: visible;
@@ -5643,5 +6349,33 @@ main {
   .account-members-table th,
   .account-members-table td {
     padding: 6px 8px;
+  }
+  .account-members-table th.col-pass,
+  .account-members-table td.cell-pass {
+    display: none;
+  }
+  .pass-modal-topbar,
+  .pass-modal-actions {
+    display: none !important;
+  }
+  .pass-modal-backdrop {
+    position: static;
+    background: #ffffff;
+    padding: 0;
+  }
+  .pass-modal-shell,
+  .pass-modal-scroll-area {
+    box-shadow: none;
+    border: none;
+    background: #ffffff;
+    padding: 0;
+    overflow: visible;
+    max-height: none;
+  }
+  .fpass-card {
+    box-shadow: none;
+    margin: 0 auto;
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 }

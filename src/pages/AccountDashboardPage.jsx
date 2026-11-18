@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
+import ParticipantPassModal from '../components/ParticipantPassModal';
 import {
   getStoredTeamLeader,
   clearStoredTeamLeader,
@@ -36,6 +37,7 @@ export default function AccountDashboardPage() {
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState('');
   const [generatingPdfIdx, setGeneratingPdfIdx] = useState(null);
+  const [activePass, setActivePass] = useState(null);
 
   const loadDashboard = useCallback(async (rollNo) => {
     if (!rollNo) return;
@@ -408,6 +410,7 @@ export default function AccountDashboardPage() {
                                   <th scope="col" className="col-dept">Department / Year</th>
                                   <th scope="col" className="col-email">Email</th>
                                   <th scope="col" className="col-mobile">Mobile</th>
+                                  <th scope="col" className="col-pass">Pass</th>
                                 </tr>
                               </thead>
                               <tbody>
@@ -433,6 +436,22 @@ export default function AccountDashboardPage() {
                                       </td>
                                       <td className="cell-email">{m.email || '—'}</td>
                                       <td className="cell-mobile">{m.phone || m.mobile || '—'}</td>
+                                      <td className="cell-pass">
+                                        <button
+                                          type="button"
+                                          className="table-view-pass-btn"
+                                          onClick={() => setActivePass({ member: m, registration: reg })}
+                                        >
+                                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                            <rect x="2" y="5" width="20" height="14" rx="2" />
+                                            <line x1="7" y1="9" x2="7" y2="15" />
+                                            <line x1="11" y1="9" x2="11" y2="15" />
+                                            <line x1="15" y1="9" x2="15" y2="15" />
+                                            <line x1="18" y1="9" x2="18" y2="15" />
+                                          </svg>
+                                          View Pass
+                                        </button>
+                                      </td>
                                     </tr>
                                   );
                                 })}
@@ -525,6 +544,14 @@ export default function AccountDashboardPage() {
           </div>
         )}
       </section>
+
+      {activePass && (
+        <ParticipantPassModal
+          member={activePass.member}
+          registration={activePass.registration}
+          onClose={() => setActivePass(null)}
+        />
+      )}
     </main>
   );
 }

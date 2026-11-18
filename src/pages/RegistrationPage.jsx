@@ -12,7 +12,8 @@ import {
   checkForensithonMembersEligibility,
   saveTeamMembersDraft,
   createForensithonOrder,
-  verifyForensithonPayment
+  verifyForensithonPayment,
+  findPaidEventForChallenge
 } from '../services/api';
 
 const FORENSIC_BRANCH_OPTIONS = [
@@ -312,6 +313,7 @@ export default function RegistrationPage() {
   const [agreed, setAgreed] = useState(false);
   const [validationErrors, setValidationErrors] = useState({});
   const [submittedData, setSubmittedData] = useState(null);
+  const [paidEvents, setPaidEvents] = useState([]);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [paymentStage, setPaymentStage] = useState('idle'); // 'idle' | 'creating_order' | 'awaiting_checkout' | 'verifying'
   const [paymentErrorMessage, setPaymentErrorMessage] = useState('');
@@ -372,8 +374,106 @@ export default function RegistrationPage() {
     return { nextMembers: base, nextConfirmedCount: Math.max(1, consecutiveConfirmed) };
   }, []);
 
+  const buildSubmittedPayload = useCallback(
+    (reg, pay, membersList, resolvedTeamName) => {
+      const paidAtDate = pay?.paidAt || reg?.paidAt || reg?.payment?.paidAt || reg?.updatedAt || reg?.updated_at;
+      const timestamp = paidAtDate
+        ? new Date(paidAtDate).toLocaleString('en-IN', {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        })
+        : new Date().toLocaleString('en-IN');
+
+      const resolvedAmount =
+        pay?.amountInPaise !== undefined && pay?.amountInPaise !== null
+          ? Math.round(Number(pay.amountInPaise) / 100)
+          : (pay?.amount || reg?.payment?.amount || reg?.fee?.amount || REGISTRATION_AMOUNT);
+
+      return {
+        regId: reg?.registrationNumber || pay?.registrationNumber || 'CONFIRMED',
+        teamId: reg?.teamId || reg?.meta?.teamId || reg?.registrationNumber || '',
+        paymentReference: pay?.paymentReference || reg?.payment?.paymentReference || '',
+        timestamp,
+        teamName: resolvedTeamName || reg?.teamName || 'Registered Team',
+        domain: reg?.domainTitle || pay?.domainTitle || reg?.domainCode || 'Forensithon',
+        challengeId: reg?.challengeId || pay?.challengeId || '',
+        challengeTitle: reg?.challengeTitle || pay?.challengeTitle || reg?.eventTitle || '',
+        forensicRole: reg?.forensicScope || '',
+        technicalRole: reg?.technicalScope || '',
+        members: membersList,
+        razorpayOrderId: pay?.razorpay?.orderId || reg?.payment?.orderId || reg?.razorpayOrderId || '',
+        razorpayPaymentId: pay?.razorpay?.paymentId || reg?.payment?.paymentId || reg?.razorpayPaymentId || '',
+        amount: resolvedAmount,
+        status: 'PAID & CONFIRMED · VERIFIED VIA RAZORPAY'
+      };
+    },
+    []
+  );
+
   const applyServerState = useCallback(
-    (student, state, keepQueryChallenge = false) => {
+    (student, state, keepQueryChallenge = false, requestedChallengeParam = '') => {
+      const serverPaidEvents = Array.isArray(state?.paidEvents) ? state.paidEvents : [];
+      setPaidEvents(serverPaidEvents);
+
+      const queryKey = String(requestedChallengeParam || '').trim().toUpperCase();
+      const matchedPaidForQuery = queryKey
+        ? serverPaidEvents.find((pe) => {
+          const cid = String(pe.challengeId || pe.registration?.challengeId || '').trim().toUpperCase();
+          const eid = String(pe.centralEventId || pe.registration?.centralEventId || '').trim().toUpperCase();
+          const ttl = String(pe.challengeTitle || pe.eventTitle || '').trim().toUpperCase();
+          return cid === queryKey || eid === queryKey || ttl === queryKey;
+        })
+        : null;
+
+      // Case 1: User navigated specifically to an event (?challenge=...) whose payment status is ALREADY PAID
+      // -> Block registration access for this event and show their confirmed PAID receipt.
+      if (keepQueryChallenge && matchedPaidForQuery) {
+        const paidReg = matchedPaidForQuery.registration || state?.registration || null;
+        const paidPay = matchedPaidForQuery.payment || state?.payment || null;
+        const resolvedTeamName = String(paidReg?.teamName || matchedPaidForQuery.teamName || student?.teamName || '').trim();
+        setTeamName(resolvedTeamName);
+        const { nextMembers, nextConfirmedCount } = buildMembersWithLeader(student, paidReg);
+        setMembers(nextMembers);
+        setConfirmedCount(nextConfirmedCount);
+        setSubmittedData(buildSubmittedPayload(paidReg, paidPay, nextMembers, resolvedTeamName));
+        return;
+      }
+
+      // Case 2: User clicked a DIFFERENT unpaid event (?challenge=DF-02) even though they paid for DF-01
+      // -> Allow them to register for that unpaid event (restore matching pendingDraft if one exists)
+      if (keepQueryChallenge && queryKey && !matchedPaidForQuery) {
+        const draft = state?.pendingDraft || null;
+        const draftMatchesQuery =
+          draft &&
+          (String(draft.challengeId || '').trim().toUpperCase() === queryKey ||
+            String(draft.centralEventId || '').trim().toUpperCase() === queryKey);
+        const regToLoad = draftMatchesQuery ? draft : null;
+        const resolvedTeamName = String(regToLoad?.teamName || student?.teamName || '').trim();
+        setTeamName(resolvedTeamName);
+        const { nextMembers, nextConfirmedCount } = buildMembersWithLeader(student, regToLoad);
+        setMembers(nextMembers);
+        setConfirmedCount(nextConfirmedCount);
+        setSubmittedData(null);
+        return;
+      }
+
+      // Case 3: No query challenge — restore pending draft if present, else show confirmed PAID receipt
+      const pendingDraft = state?.pendingDraft || null;
+      if (pendingDraft) {
+        const resolvedTeamName = String(pendingDraft.teamName || student?.teamName || '').trim();
+        setTeamName(resolvedTeamName);
+        const { nextMembers, nextConfirmedCount } = buildMembersWithLeader(student, pendingDraft);
+        setMembers(nextMembers);
+        setConfirmedCount(nextConfirmedCount);
+        if (pendingDraft.domainCode) setSelectedDomain(String(pendingDraft.domainCode).toUpperCase());
+        if (pendingDraft.challengeId) setSelectedChallengeId(String(pendingDraft.challengeId));
+        setSubmittedData(null);
+        return;
+      }
+
       const reg = state?.registration || null;
       const pay = state?.payment || null;
       const resolvedTeamName = String(reg?.teamName || student?.teamName || '').trim();
@@ -390,50 +490,19 @@ export default function RegistrationPage() {
 
       const isConfirmedAndPaid = Boolean(
         state?.isConfirmedAndPaid ||
+        serverPaidEvents.length > 0 ||
         String(reg?.status || '').toUpperCase() === 'CONFIRMED' ||
         String(reg?.payment?.status || '').toUpperCase() === 'PAID' ||
         String(pay?.status || '').toUpperCase() === 'PAID'
       );
 
-      if ((isConfirmedAndPaid || String(reg?.status || '').toUpperCase() === 'CONFIRMED') && reg) {
-        const paidAtDate = pay?.paidAt || reg?.paidAt || reg?.payment?.paidAt || reg?.updatedAt || reg?.updated_at;
-        const timestamp = paidAtDate
-          ? new Date(paidAtDate).toLocaleString('en-IN', {
-            day: 'numeric',
-            month: 'short',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-          })
-          : new Date().toLocaleString('en-IN');
-
-        const resolvedAmount =
-          pay?.amountInPaise !== undefined && pay?.amountInPaise !== null
-            ? Math.round(Number(pay.amountInPaise) / 100)
-            : (pay?.amount || reg?.payment?.amount || reg?.fee?.amount || REGISTRATION_AMOUNT);
-
-        setSubmittedData({
-          regId: reg?.registrationNumber || pay?.registrationNumber || 'CONFIRMED',
-          teamId: reg?.teamId || reg?.meta?.teamId || reg?.registrationNumber || '',
-          paymentReference: pay?.paymentReference || reg?.payment?.paymentReference || '',
-          timestamp,
-          teamName: resolvedTeamName || 'Registered Team',
-          domain: reg?.domainTitle || pay?.domainTitle || reg?.domainCode || 'Forensithon',
-          challengeId: reg?.challengeId || pay?.challengeId || '',
-          challengeTitle: reg?.challengeTitle || pay?.challengeTitle || reg?.eventTitle || '',
-          forensicRole: reg?.forensicScope || '',
-          technicalRole: reg?.technicalScope || '',
-          members: nextMembers,
-          razorpayOrderId: pay?.razorpay?.orderId || reg?.payment?.orderId || reg?.razorpayOrderId || '',
-          razorpayPaymentId: pay?.razorpay?.paymentId || reg?.payment?.paymentId || reg?.razorpayPaymentId || '',
-          amount: resolvedAmount,
-          status: 'PAID & CONFIRMED · VERIFIED VIA RAZORPAY'
-        });
+      if (isConfirmedAndPaid && reg) {
+        setSubmittedData(buildSubmittedPayload(reg, pay, nextMembers, resolvedTeamName));
       } else {
         setSubmittedData(null);
       }
     },
-    [buildMembersWithLeader]
+    [buildMembersWithLeader, buildSubmittedPayload]
   );
 
   // Load dynamic categories & challenges from unified-backend
@@ -508,6 +577,7 @@ export default function RegistrationPage() {
         initialSyncDoneRef.current = false;
         setLoggedInLeader(null);
         setSubmittedData(null);
+        setPaidEvents([]);
         setTeamName('');
         setMembers(createInitialMembers());
         setConfirmedCount(0);
@@ -539,9 +609,9 @@ export default function RegistrationPage() {
 
         setLoggedInLeader(state?.account || verifiedStudent);
         if (state) {
-          applyServerState(state.account || verifiedStudent, state, Boolean(initialChallengeId));
+          applyServerState(state.account || verifiedStudent, state, Boolean(initialChallengeId), initialChallengeId || '');
         } else {
-          applyServerState(verifiedStudent, null, Boolean(initialChallengeId));
+          applyServerState(verifiedStudent, null, Boolean(initialChallengeId), initialChallengeId || '');
         }
       })
       .catch((err) => {
@@ -673,7 +743,7 @@ export default function RegistrationPage() {
     );
   }, [catalog.challenges, selectedDomain]);
 
-  // When domain changes, ensure selected challenge belongs to the domain
+  // When domain changes, prefer the first UNPAID challenge in that domain
   const handleDomainChange = (domainCode) => {
     const code = String(domainCode);
     setSelectedDomain(code);
@@ -681,7 +751,8 @@ export default function RegistrationPage() {
       (c) => String(c.categoryCode).toUpperCase() === code.toUpperCase()
     );
     if (challengesForDomain.length > 0) {
-      setSelectedChallengeId(challengesForDomain[0].id);
+      const firstUnpaid = challengesForDomain.find((c) => !findPaidEventForChallenge(c, paidEvents));
+      setSelectedChallengeId((firstUnpaid || challengesForDomain[0]).id);
     } else {
       setSelectedChallengeId('');
     }
@@ -695,6 +766,12 @@ export default function RegistrationPage() {
       null
     );
   }, [catalog.challenges, selectedChallengeId, domainChallenges]);
+
+  // Check if the logged-in student already has a PAID registration for the currently selected event
+  const paidRecordForCurrentChallenge = useMemo(
+    () => findPaidEventForChallenge(currentChallenge, paidEvents),
+    [currentChallenge, paidEvents]
+  );
 
   const currentDomainInfo = useMemo(() => {
     return (
@@ -902,10 +979,10 @@ export default function RegistrationPage() {
       initialSyncDoneRef.current = true;
       setLoggedInLeader(student);
       const serverState = await fetchTeamLeaderState(student.roll).catch(() => null);
-      applyServerState(student, serverState, Boolean(initialChallengeId));
+      applyServerState(student, serverState, Boolean(initialChallengeId), initialChallengeId || '');
       setSaveNotice(
-        serverState?.registration
-          ? `Welcome back, ${student.name} (${student.roll})! Your saved team details have been restored.`
+        serverState?.pendingDraft
+          ? `Welcome back, ${student.name} (${student.roll})! Your saved team draft has been restored.`
           : `Logged in as ${student.name} (${student.roll}). Add your remaining 5 team members below.`
       );
       setSaveError('');
@@ -921,6 +998,7 @@ export default function RegistrationPage() {
     initialSyncDoneRef.current = false;
     setLoggedInLeader(null);
     setSubmittedData(null);
+    setPaidEvents([]);
     setAuthMode('login');
     setAuthError('');
     setAuthSuccess('');
@@ -941,6 +1019,12 @@ export default function RegistrationPage() {
   // Persist Team Name + Team Leader + Remaining 5 Members to central_event_student_registrations
   const persistTeamDraft = async (nextMembersList = members, overrideTeamName = teamName) => {
     if (!loggedInLeader) return;
+    if (paidRecordForCurrentChallenge) {
+      setSaveError(
+        `Registration access is locked: payment status is already PAID for "${currentChallenge?.title || currentChallenge?.id}" (Team ID: ${paidRecordForCurrentChallenge.teamId || paidRecordForCurrentChallenge.registrationNumber}).`
+      );
+      return;
+    }
     const cleanTeamName = (overrideTeamName || loggedInLeader.teamName || '').trim();
     if (!cleanTeamName) {
       setSaveError('Enter a Team Name in Step 01 before saving team members.');
@@ -1135,6 +1219,13 @@ export default function RegistrationPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    if (paidRecordForCurrentChallenge) {
+      setPaymentErrorMessage(
+        `Registration access is disabled: payment status is already PAID for "${currentChallenge?.title || currentChallenge?.id}" (Team ID: ${paidRecordForCurrentChallenge.teamId || paidRecordForCurrentChallenge.registrationNumber}).`
+      );
+      return;
+    }
+
     if (!allRemainingFiveFilled) {
       setPaymentErrorMessage('Payment is disabled until all 5 remaining team members are filled.');
       return;
@@ -1255,6 +1346,25 @@ export default function RegistrationPage() {
             };
 
             setSubmittedData(confirmedRecord);
+            setPaidEvents((prev) => [
+              ...prev,
+              {
+                registrationId: String(orderData.regDocId || ''),
+                registrationNumber: confirmedRecord.regId,
+                teamId: confirmedRecord.teamId || confirmedRecord.regId,
+                teamName: confirmedRecord.teamName,
+                centralEventId: currentChallenge?.sourceType === 'central_event' ? String(currentChallenge._id || '') : '',
+                challengeId: confirmedRecord.challengeId,
+                challengeTitle: confirmedRecord.challengeTitle,
+                eventTitle: currentChallenge?.rawTitle || confirmedRecord.challengeTitle,
+                status: 'CONFIRMED',
+                paymentStatus: 'PAID',
+                paymentReference: confirmedRecord.paymentReference,
+                razorpayPaymentId: confirmedRecord.razorpayPaymentId,
+                razorpayOrderId: confirmedRecord.razorpayOrderId,
+                amount: confirmedRecord.amount
+              }
+            ]);
             setPaymentStage('idle');
             setIsProcessingPayment(false);
             window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1504,6 +1614,9 @@ export default function RegistrationPage() {
               </button>
               <Link to="/account" className="button secondary">
                 My Account Dashboard ↗
+              </Link>
+              <Link to="/challenges" className="button secondary">
+                Explore Other Challenges ↗
               </Link>
               <button
                 type="button"
@@ -1929,6 +2042,10 @@ export default function RegistrationPage() {
                 <p className="leader-session-sub">
                   {syncingTeamState ? (
                     <span>Syncing your saved team details from database...</span>
+                  ) : paidRecordForCurrentChallenge ? (
+                    <>
+                      <strong>✓ Payment Status: PAID for {currentChallenge?.id}.</strong> Registration access is locked for this event. Select another event or open Account Dashboard to view your pass.
+                    </>
                   ) : allRemainingFiveFilled ? (
                     <>
                       <strong>✓ All 6 team members are already saved in the database!</strong> Only payment is pending — proceed directly to Step 03 to pay via Razorpay.
@@ -1942,7 +2059,7 @@ export default function RegistrationPage() {
                 </p>
               </div>
               <div className="leader-session-actions" style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                {allRemainingFiveFilled && (
+                {allRemainingFiveFilled && !paidRecordForCurrentChallenge && (
                   <button
                     type="button"
                     className="button"
@@ -2065,17 +2182,48 @@ export default function RegistrationPage() {
                     ) : domainChallenges.length === 0 ? (
                       <option value="">No problem statements published in this track yet</option>
                     ) : (
-                      domainChallenges.map((c) => (
-                        <option key={c._id || c.id} value={c.id}>
-                          [{c.id}] {c.title}
-                        </option>
-                      ))
+                      domainChallenges.map((c) => {
+                        const isPaid = Boolean(findPaidEventForChallenge(c, paidEvents));
+                        return (
+                          <option key={c._id || c.id} value={c.id} disabled={isPaid}>
+                            [{c.id}] {c.title}{isPaid ? ' — (ALREADY REGISTERED · PAID)' : ''}
+                          </option>
+                        );
+                      })
                     )}
                   </select>
                   {validationErrors.challenge && (
                     <span className="form-error-msg">{validationErrors.challenge}</span>
                   )}
                 </div>
+
+                {/* Locked Banner if the selected event's payment status is ALREADY PAID */}
+                {paidRecordForCurrentChallenge && (
+                  <div className="event-paid-lock-banner" role="alert">
+                    <div className="event-paid-lock-head">
+                      <span className="event-paid-lock-pill">✓ PAYMENT STATUS: PAID · REGISTRATION LOCKED</span>
+                      <span className="event-paid-lock-team">
+                        Team ID: <strong>{paidRecordForCurrentChallenge.teamId || paidRecordForCurrentChallenge.registrationNumber}</strong>
+                      </span>
+                    </div>
+                    <h3 className="event-paid-lock-title">
+                      You have already registered and completed payment for [{currentChallenge?.id}] {currentChallenge?.title}
+                    </h3>
+                    <p className="event-paid-lock-desc">
+                      Registration access is disabled for this event because your payment status is already <strong>PAID</strong>
+                      {paidRecordForCurrentChallenge.razorpayPaymentId ? ` (Payment ID: ${paidRecordForCurrentChallenge.razorpayPaymentId})` : ''}.
+                      To view your squad details or download your entry pass, open your Account Dashboard. To register for a different event, choose another problem statement above.
+                    </p>
+                    <div className="event-paid-lock-actions">
+                      <Link to="/account" className="button">
+                        View Registration &amp; Entry Pass ↗
+                      </Link>
+                      <Link to="/challenges" className="button secondary">
+                        Browse Other Challenges ↗
+                      </Link>
+                    </div>
+                  </div>
+                )}
 
                 {/* Selected Challenge Preview Card */}
                 {currentChallenge && (
@@ -2129,6 +2277,9 @@ export default function RegistrationPage() {
                 )}
               </div>
 
+              {/* STEP 2 & STEP 3: Hidden whenever the selected event is ALREADY PAID */}
+              {!paidRecordForCurrentChallenge && (
+                <>
               {/* STEP 2: Team Members — Horizontal Add-One-By-One & In-Place Edit Flow */}
               <div className="form-card-section">
                 <div className="form-card-header">
@@ -2817,6 +2968,8 @@ export default function RegistrationPage() {
                   </p>
                 </div>
               </div>
+                </>
+              )}
             </form>
           </>
         )}

@@ -1,6 +1,11 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { fetchForensithonCatalog } from '../services/api';
+import {
+  fetchForensithonCatalog,
+  getStoredTeamLeader,
+  fetchTeamLeaderState,
+  findPaidEventForChallenge
+} from '../services/api';
 
 export default function ChallengesPage({ motionOff }) {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -9,12 +14,36 @@ export default function ChallengesPage({ motionOff }) {
   const [catalog, setCatalog] = useState({ domains: [], challenges: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [paidEvents, setPaidEvents] = useState([]);
 
   const [search, setSearch] = useState('');
   const [selectedDomain, setSelectedDomain] = useState(domainQuery || '');
   const [viewMode, setViewMode] = useState('detailed'); // 'detailed' | 'compact'
   const [expandedCards, setExpandedCards] = useState(new Set());
   const resultsRef = useRef(null);
+
+  // Sync logged-in student's PAID Forensithon events so already-paid events are locked from re-registration
+  const loadPaidEvents = useCallback(async () => {
+    const student = getStoredTeamLeader();
+    const roll = student?.roll ? String(student.roll).trim().toUpperCase() : '';
+    if (!roll) {
+      setPaidEvents([]);
+      return;
+    }
+    try {
+      const state = await fetchTeamLeaderState(roll);
+      setPaidEvents(Array.isArray(state?.paidEvents) ? state.paidEvents : []);
+    } catch {
+      setPaidEvents([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadPaidEvents();
+    const onAuthChanged = () => loadPaidEvents();
+    window.addEventListener('forensithon-auth-changed', onAuthChanged);
+    return () => window.removeEventListener('forensithon-auth-changed', onAuthChanged);
+  }, [loadPaidEvents]);
 
   const loadCatalog = useCallback(async () => {
     setLoading(true);
@@ -394,11 +423,13 @@ export default function ChallengesPage({ motionOff }) {
               <div className="challenge-cards-feed">
                 {filteredChallenges.map((c) => {
                   const isCardOpen = viewMode === 'detailed' || expandedCards.has(c.id);
+                  const paidRecord = findPaidEventForChallenge(c, paidEvents);
+                  const isAlreadyPaid = Boolean(paidRecord);
 
                   return (
                     <article
                       key={c._id || c.id}
-                      className={`challenge-feed-card ${isCardOpen ? 'is-expanded' : ''}`}
+                      className={`challenge-feed-card ${isCardOpen ? 'is-expanded' : ''} ${isAlreadyPaid ? 'challenge-feed-card--paid' : ''}`}
                       id={(c.slug || c.id).toLowerCase()}
                     >
                       {/* Card Header Strip */}
@@ -411,13 +442,22 @@ export default function ChallengesPage({ motionOff }) {
                         </div>
 
                         <div className="feed-card-header-actions">
-                          <Link
-                            to={`/registration?challenge=${encodeURIComponent(c.id)}`}
-                            className="feed-card-register-btn"
-                            title={`Select ${c.id} and proceed to registration`}
-                          >
-                            Register with {c.id} →
-                          </Link>
+                          {isAlreadyPaid ? (
+                            <span
+                              className="feed-card-paid-badge"
+                              title={`Already registered and paid (${paidRecord.teamId || paidRecord.registrationNumber}). Re-registration is disabled for this event.`}
+                            >
+                              ✓ Registered · PAID
+                            </span>
+                          ) : (
+                            <Link
+                              to={`/registration?challenge=${encodeURIComponent(c.id)}`}
+                              className="feed-card-register-btn"
+                              title={`Select ${c.id} and proceed to registration`}
+                            >
+                              Register with {c.id} →
+                            </Link>
+                          )}
                         </div>
                       </div>
 
@@ -542,12 +582,22 @@ export default function ChallengesPage({ motionOff }) {
                               Collapse Scopes ↑
                             </button>
                           )}
-                          <Link
-                            to={`/registration?challenge=${encodeURIComponent(c.id)}`}
-                            className="feed-footer-link"
-                          >
-                            Lock in this challenge ↗
-                          </Link>
+                          {isAlreadyPaid ? (
+                            <Link
+                              to="/account"
+                              className="feed-footer-link feed-footer-link--paid"
+                              title="View your confirmed registration and entry pass in Account"
+                            >
+                              Already Paid ({paidRecord.teamId || paidRecord.registrationNumber}) · View Pass ↗
+                            </Link>
+                          ) : (
+                            <Link
+                              to={`/registration?challenge=${encodeURIComponent(c.id)}`}
+                              className="feed-footer-link"
+                            >
+                              Lock in this challenge ↗
+                            </Link>
+                          )}
                         </div>
                       </div>
                     </article>

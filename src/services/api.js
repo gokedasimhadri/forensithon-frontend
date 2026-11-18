@@ -768,3 +768,33 @@ export async function verifyForensithonPayment(payload) {
   return json;
 }
 
+/**
+ * Match a catalog challenge against a student's PAID Forensithon registrations.
+ * Returns the matching paid event record if payment status is PAID, otherwise null.
+ */
+export function findPaidEventForChallenge(challenge, paidEvents = []) {
+  if (!challenge || !Array.isArray(paidEvents) || paidEvents.length === 0) return null;
+
+  const cEventId = String(challenge.centralEventId || challenge._id || '').trim();
+  const cId = String(challenge.id || '').trim().toUpperCase();
+  const cTitle = String(challenge.title || challenge.rawTitle || '').trim().toLowerCase();
+
+  return (
+    paidEvents.find((pe) => {
+      if (!pe) return false;
+      const statusUpper = String(pe.paymentStatus || pe.payment?.status || pe.status || '').toUpperCase();
+      if (statusUpper && statusUpper !== 'PAID' && statusUpper !== 'CONFIRMED') return false;
+
+      const peEventId = String(pe.centralEventId || pe.registration?.centralEventId || '').trim();
+      const peChallengeId = String(pe.challengeId || pe.registration?.challengeId || '').trim().toUpperCase();
+      const peTitle = String(pe.challengeTitle || pe.eventTitle || pe.registration?.eventTitle || '').trim().toLowerCase();
+
+      if (cEventId && peEventId && cEventId === peEventId) return true;
+      if (cId && peChallengeId && cId === peChallengeId) return true;
+      if (cTitle && peTitle && cTitle === peTitle) return true;
+      return false;
+    }) || null
+  );
+}
+
+
