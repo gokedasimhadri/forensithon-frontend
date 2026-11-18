@@ -175,7 +175,6 @@ const createInitialMembers = () => [
     id: 1,
     tier: 'forensic',
     tierTitle: 'Tier 1 · Forensic Science',
-    role: 'Team Leader & Primary Contact',
     isLead: true,
     rollNo: '',
     name: '',
@@ -188,7 +187,6 @@ const createInitialMembers = () => [
     id: 2,
     tier: 'forensic',
     tierTitle: 'Tier 1 · Forensic Science',
-    role: 'Forensic Investigator',
     isLead: false,
     rollNo: '',
     name: '',
@@ -202,7 +200,6 @@ const createInitialMembers = () => [
     id: 3,
     tier: 'engineering',
     tierTitle: 'Tier 2 · Engineering & Allied',
-    role: 'Technical Lead & Builder',
     isLead: false,
     rollNo: '',
     name: '',
@@ -215,7 +212,6 @@ const createInitialMembers = () => [
     id: 4,
     tier: 'engineering',
     tierTitle: 'Tier 2 · Engineering & Allied',
-    role: 'Technical Specialist',
     isLead: false,
     rollNo: '',
     name: '',
@@ -229,7 +225,6 @@ const createInitialMembers = () => [
     id: 5,
     tier: 'open',
     tierTitle: 'Tier 3 · Open Discipline',
-    role: 'Research & UX Lead',
     isLead: false,
     rollNo: '',
     name: '',
@@ -242,7 +237,6 @@ const createInitialMembers = () => [
     id: 6,
     tier: 'open',
     tierTitle: 'Tier 3 · Open Discipline',
-    role: 'Interdisciplinary Builder',
     isLead: false,
     rollNo: '',
     name: '',
@@ -395,11 +389,12 @@ export default function RegistrationPage() {
 
       const isConfirmedAndPaid = Boolean(
         state?.isConfirmedAndPaid ||
-        (String(reg?.status || '').toUpperCase() === 'CONFIRMED' &&
-          String(pay?.status || '').toUpperCase() === 'PAID')
+        String(reg?.status || '').toUpperCase() === 'CONFIRMED' ||
+        String(reg?.payment?.status || '').toUpperCase() === 'PAID' ||
+        String(pay?.status || '').toUpperCase() === 'PAID'
       );
 
-      if (isConfirmedAndPaid && reg && pay) {
+      if ((isConfirmedAndPaid || String(reg?.status || '').toUpperCase() === 'CONFIRMED') && reg) {
         const paidAtDate = pay?.paidAt || reg?.paidAt || reg?.payment?.paidAt || reg?.updatedAt || reg?.updated_at;
         const timestamp = paidAtDate
           ? new Date(paidAtDate).toLocaleString('en-IN', {
@@ -530,12 +525,6 @@ export default function RegistrationPage() {
     let active = true;
     setSyncingTeamState(true);
 
-    // Pre-fill leader slot immediately while saved 6-member draft/confirmed record loads from DB
-    const cachedLeader = getStoredTeamLeader() || loggedInLeader;
-    if (cachedLeader) {
-      applyServerState(cachedLeader, null, Boolean(initialChallengeId));
-    }
-
     refreshLoggedInStudent()
       .then(async (verifiedStudent) => {
         if (!active) return;
@@ -584,11 +573,32 @@ export default function RegistrationPage() {
     try {
       const student = await fetchStudentDetailsFromApi(cleanRoll);
 
+      if (student && student.alreadyRegistered) {
+        lastFetchedRollRef.current[index] = cleanRoll;
+        const studentName = (student.studentname || student.studentName || student.name || cleanRoll).trim();
+        setLookupStatuses((prev) => {
+          const copy = [...prev];
+          copy[index] = {
+            status: 'already_registered',
+            studentName,
+            message: `Already registered in team "${student.teamName}" for ${student.eventTitle}!`
+          };
+          return copy;
+        });
+        setValidationErrors((prev) => ({
+          ...prev,
+          [`member_${index}_rollNo`]: `Already Registered: ${studentName} (${cleanRoll}) is already registered in team "${student.teamName}" for "${student.eventTitle}". Registered students cannot register again.`
+        }));
+        return;
+      }
+
       if (student && !student.error && (student.studentname || student.studentName || student.name)) {
         lastFetchedRollRef.current[index] = cleanRoll;
         const studentName = (student.studentname || student.studentName || student.name || '').trim();
         const phone = (student.mobilenumber || student.MobileNumber || student.mobile || student.phone || student.fathermobilenumber || '').trim();
         const rawEmail = (student.emailid || student.email || student.Email || student.EmailId || '').trim();
+        const defaultStudentEmail = cleanRoll ? `${cleanRoll.toLowerCase()}@aditya.ac.in` : '';
+        const resolvedEmail = (rawEmail || defaultStudentEmail).toLowerCase();
 
         const tier = members[index]?.tier || 'forensic';
         const mappedYear = mapSemesterToYear(student.semestername || student.semester || student.year, student.joinedbatch, student.coursename);
@@ -599,7 +609,7 @@ export default function RegistrationPage() {
           copy[index] = {
             ...copy[index],
             name: studentName || copy[index].name,
-            email: rawEmail ? rawEmail.toLowerCase() : copy[index].email,
+            email: resolvedEmail,
             branch: mappedBranch || copy[index].branch,
             year: mappedYear || copy[index].year,
             phone: phone || copy[index].phone
@@ -623,7 +633,7 @@ export default function RegistrationPage() {
           const next = { ...prev };
           delete next[`member_${index}_rollNo`];
           delete next[`member_${index}_name`];
-          if (rawEmail) delete next[`member_${index}_email`];
+          if (resolvedEmail) delete next[`member_${index}_email`];
           if (phone) delete next[`member_${index}_phone`];
           return next;
         });
@@ -633,6 +643,16 @@ export default function RegistrationPage() {
           copy[index] = { status: 'not_found', studentName: '', message: 'Not found — enter manually' };
           return copy;
         });
+        if (cleanRoll.length >= 6) {
+          setMembers((prev) => {
+            const copy = [...prev];
+            copy[index] = {
+              ...copy[index],
+              email: `${cleanRoll.toLowerCase()}@aditya.ac.in`
+            };
+            return copy;
+          });
+        }
       }
     } catch (err) {
       console.warn('Student lookup failed:', err);
@@ -720,10 +740,26 @@ export default function RegistrationPage() {
       // Ignore stale response if user already changed the Roll Number input
       if (latestAuthRollRef.current !== cleanRoll) return;
 
+      if (student && student.alreadyRegistered) {
+        lastAuthAutoFilledRollRef.current = cleanRoll;
+        const studentName = (student.studentname || student.studentName || student.name || cleanRoll).trim();
+        setAuthLookupStatus({
+          status: 'already_registered',
+          studentName,
+          message: `Already registered in team "${student.teamName}" for "${student.eventTitle}"!`
+        });
+        setAuthError(
+          `Student (${cleanRoll}) is already registered in team "${student.teamName}" for "${student.eventTitle}". Re-registration is not allowed. Please switch to the Login tab to view your registration details.`
+        );
+        return;
+      }
+
       if (student && !student.error && (student.studentname || student.studentName || student.name)) {
         const studentName = (student.studentname || student.studentName || student.name || '').trim();
         const phone = (student.mobilenumber || student.MobileNumber || student.mobile || student.phone || student.fathermobilenumber || '').trim();
         const rawEmail = (student.emailid || student.email || student.Email || student.EmailId || '').trim().toLowerCase();
+        const defaultStudentEmail = cleanRoll ? `${cleanRoll.toLowerCase()}@aditya.ac.in` : '';
+        const resolvedEmail = rawEmail || defaultStudentEmail;
         const mappedYear = mapSemesterToYear(student.semestername || student.semester || student.year, student.joinedbatch, student.coursename);
         const mappedBranch = mapStudentBranch('forensic', student.branch || student.department, student.coursename);
 
@@ -731,7 +767,7 @@ export default function RegistrationPage() {
         setRegisterForm((prev) => ({
           ...prev,
           name: studentName || '',
-          email: rawEmail || '',
+          email: resolvedEmail || '',
           mobile: phone || '',
           branch: mappedBranch || prev.branch,
           year: mappedYear || prev.year,
@@ -794,6 +830,11 @@ export default function RegistrationPage() {
     if (!emailVal || !emailVal.includes('@')) return setAuthError('Please enter a valid Email ID.');
     if (!mobileVal) return setAuthError('Mobile number is required for the Team Leader.');
     if (!passwordVal || passwordVal.length < 4) return setAuthError('Please create a password (at least 4 characters).');
+    if (authLookupStatus?.status === 'already_registered') {
+      return setAuthError(
+        `Student (${rNo}) is already registered in a confirmed team. Re-registration is not allowed. Please switch to the Login tab.`
+      );
+    }
 
     setAuthLoading(true);
     try {
@@ -929,7 +970,6 @@ export default function RegistrationPage() {
           studentIndex: idx + 1,
           tier: m.tier,
           tierTitle: m.tierTitle,
-          role: m.role,
           isLead: idx === 0,
           name: (m.name || '').trim(),
           rollNo: (m.rollNo || '').trim().toUpperCase(),
@@ -951,7 +991,19 @@ export default function RegistrationPage() {
   const handleMemberChange = (index, field, value) => {
     setMembers((prev) => {
       const copy = [...prev];
-      copy[index] = { ...copy[index], [field]: value };
+      const prevMember = copy[index] || {};
+      const updated = { ...prevMember, [field]: value };
+
+      if (field === 'rollNo') {
+        const cleanRoll = value.trim().toUpperCase();
+        if (cleanRoll.length >= 6) {
+          updated.email = `${cleanRoll.toLowerCase()}@aditya.ac.in`;
+        } else if (!cleanRoll) {
+          updated.email = '';
+        }
+      }
+
+      copy[index] = updated;
       return copy;
     });
 
@@ -1000,6 +1052,8 @@ export default function RegistrationPage() {
     members.forEach((m, idx) => {
       if (!m.rollNo.trim()) {
         errors[`member_${idx}_rollNo`] = `Roll number is required.`;
+      } else if (lookupStatuses[idx]?.status === 'already_registered') {
+        errors[`member_${idx}_rollNo`] = `Student (${m.rollNo}) is already registered in another team.`;
       }
       if (!m.name.trim()) {
         errors[`member_${idx}_name`] = `Student ${idx + 1} name is required.`;
@@ -1080,7 +1134,6 @@ export default function RegistrationPage() {
           studentIndex: idx + 1,
           tier: m.tier,
           tierTitle: m.tierTitle,
-          role: m.role,
           isLead: idx === 0,
           name: m.name.trim(),
           rollNo: m.rollNo.trim().toUpperCase(),
@@ -1335,7 +1388,7 @@ export default function RegistrationPage() {
                   {submittedData.members.map((m, idx) => (
                     <div key={idx} className={`receipt-member-item receipt-member-item--${m.tier}`}>
                       <div className="receipt-member-top">
-                        <span className="receipt-member-role">{m.role}</span>
+                        <span className="receipt-member-role">{m.role || (m.isLead || idx === 0 ? 'Team Leader' : `Member ${idx + 1}`)}</span>
                         <span className="receipt-member-tier-pill">{m.tierTitle}</span>
                       </div>
                       <span className="receipt-member-roll-badge">{m.rollNo}</span>
@@ -1613,6 +1666,11 @@ export default function RegistrationPage() {
                       {authLookupStatus.status === 'not_found' && (
                         <span className="lookup-pill lookup-pill--manual">
                           {authLookupStatus.message}
+                        </span>
+                      )}
+                      {authLookupStatus.status === 'already_registered' && (
+                        <span className="lookup-pill" style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fca5a5', fontWeight: 600 }}>
+                          ⚠️ {authLookupStatus.message}
                         </span>
                       )}
                     </div>
@@ -2164,6 +2222,11 @@ export default function RegistrationPage() {
                                 {lookupStatuses[idx].message || 'Not found — enter manually'}
                               </span>
                             )}
+                            {lookupStatuses[idx]?.status === 'already_registered' && (
+                              <span className="lookup-pill" style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fca5a5', fontWeight: 600 }}>
+                                ⚠️ {lookupStatuses[idx].message || 'Already registered in another team'}
+                              </span>
+                            )}
                             {validationErrors[`member_${idx}_rollNo`] && (
                               <span className="form-error-msg">{validationErrors[`member_${idx}_rollNo`]}</span>
                             )}
@@ -2337,6 +2400,9 @@ export default function RegistrationPage() {
               const handleAddMember = () => {
                 const errors = {};
                 if (!m.rollNo.trim()) errors[`member_${idx}_rollNo`] = 'Roll number is required.';
+                else if (lookupStatuses[idx]?.status === 'already_registered') {
+                  errors[`member_${idx}_rollNo`] = 'This student is already registered in a confirmed Forensithon team. Re-registration is not allowed.';
+                }
                 if (!m.name.trim()) errors[`member_${idx}_name`] = 'Full name is required.';
                 if (!m.email.trim()) errors[`member_${idx}_email`] = 'Email address is required.';
                 else if (!m.email.includes('@')) errors[`member_${idx}_email`] = 'Enter a valid email address.';
@@ -2406,6 +2472,11 @@ export default function RegistrationPage() {
                       {lookupStatuses[idx]?.status === 'not_found' && (
                         <span className="lookup-pill lookup-pill--manual">
                           {lookupStatuses[idx].message || 'Not found — enter manually'}
+                        </span>
+                      )}
+                      {lookupStatuses[idx]?.status === 'already_registered' && (
+                        <span className="lookup-pill" style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fca5a5', fontWeight: 600 }}>
+                          ⚠️ {lookupStatuses[idx].message || 'Already registered in another team'}
                         </span>
                       )}
                       {validationErrors[`member_${idx}_rollNo`] && (
