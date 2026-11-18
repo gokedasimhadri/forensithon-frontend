@@ -61,9 +61,12 @@ export default function Header({ motionOff, toggleMotion }) {
         <NavLink to="/registration" className={({ isActive }) => (isActive ? 'active' : '')}>
           Register
         </NavLink>
+        <NavLink to="/account" className={({ isActive }) => (isActive ? 'active' : '')}>
+          Account
+        </NavLink>
       </nav>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-        {loggedUser && (
+      {loggedUser && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
           <button
             type="button"
             className="motion-toggle"
@@ -73,17 +76,8 @@ export default function Header({ motionOff, toggleMotion }) {
           >
             Logout ({loggedUser.roll || loggedUser.name?.split(' ')[0] || 'User'}) ↪
           </button>
-        )}
-        <button
-          type="button"
-          className="motion-toggle"
-          onClick={toggleMotion}
-          aria-pressed={motionOff}
-          aria-label="Toggle motion animations"
-        >
-          {motionOff ? 'Motion: Off' : 'Motion: On'}
-        </button>
-      </div>
+        </div>
+      )}
     </header>
   );
 }

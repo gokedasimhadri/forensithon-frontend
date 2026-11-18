@@ -634,14 +634,16 @@ export async function refreshLoggedInStudent() {
 
 /**
  * Register Team Leader in central_event_student_account with teamName & role: 'Team Leader'.
- * Does NOT auto-login; frontend routes to the Login tab so the Team Leader logs in with their credentials.
+ * Clears any previous stored session and does NOT auto-login; frontend routes to Login tab with that exact student's Roll No.
  */
 export async function registerTeamLeaderAccount(payload) {
+  clearStoredTeamLeader();
   const res = await apiFetch('/api/event-students/register', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       ...payload,
+      roll: String(payload.roll || '').trim().toUpperCase(),
       role: 'Team Leader',
       isTeamLeader: true
     })
@@ -657,10 +659,11 @@ export async function registerTeamLeaderAccount(payload) {
  * Authenticate existing Team Leader or Team Member from central_event_student_account and persist JWT token
  */
 export async function loginTeamLeaderAccount({ email, password }) {
+  const identifier = String(email || '').trim();
   const res = await apiFetch('/api/event-students/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password })
+    body: JSON.stringify({ identifier, email: identifier, password })
   });
   const json = await res.json().catch(() => ({}));
   if (!res.ok || !json.success) {
@@ -684,6 +687,25 @@ export async function fetchTeamLeaderState(rollNo) {
   const json = await res.json().catch(() => ({}));
   if (!res.ok || !json.success) {
     return null;
+  }
+  return json.data || null;
+}
+
+/**
+ * Fetch Student Dashboard Account data:
+ * Only returns confirmed registrations (central_event_student_registrations status=CONFIRMED)
+ * paired with paid payments (central_event_student_payments status=PAID), plus pending drafts separately.
+ */
+export async function fetchStudentDashboardData(rollNo, typeCode = EVENT_TYPE) {
+  if (!rollNo) return null;
+  const cleanRoll = encodeURIComponent(String(rollNo).trim().toUpperCase());
+  const query = typeCode ? `?typeCode=${encodeURIComponent(typeCode)}` : '';
+  const res = await apiFetch(`/api/event-students/dashboard/${cleanRoll}${query}`, {
+    headers: getAuthHeaders()
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok || !json.success) {
+    throw new Error(json.error || json.message || 'Unable to load student account dashboard.');
   }
   return json.data || null;
 }

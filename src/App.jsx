@@ -7,6 +7,7 @@ import HomePage from './pages/HomePage';
 import ChallengesPage from './pages/ChallengesPage';
 import RoundsPage from './pages/RoundsPage';
 import RegistrationPage from './pages/RegistrationPage';
+import AccountDashboardPage from './pages/AccountDashboardPage';
 import NotFoundPage from './pages/NotFoundPage';
 import { useMotion } from './hooks/useMotion';
 import { useScrollReveal } from './hooks/useScrollReveal';
@@ -35,6 +36,8 @@ export default function App() {
         <Route path="/rounds.html" element={<Navigate to="/rounds" replace />} />
         <Route path="/registration" element={<RegistrationPage />} />
         <Route path="/registration.html" element={<Navigate to="/registration" replace />} />
+        <Route path="/account" element={<AccountDashboardPage />} />
+        <Route path="/dashboard" element={<AccountDashboardPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
       <Footer />

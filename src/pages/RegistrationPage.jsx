@@ -318,9 +318,12 @@ export default function RegistrationPage() {
   const [validationErrors, setValidationErrors] = useState({});
   const [submittedData, setSubmittedData] = useState(null);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const [paymentStage, setPaymentStage] = useState('idle'); // 'idle' | 'creating_order' | 'awaiting_checkout' | 'verifying'
   const [paymentErrorMessage, setPaymentErrorMessage] = useState('');
+  const paymentHandlerTriggeredRef = useRef(false);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
+  const [syncingTeamState, setSyncingTeamState] = useState(false);
   const [saveNotice, setSaveNotice] = useState('');
   const [saveError, setSaveError] = useState('');
 
@@ -331,17 +334,18 @@ export default function RegistrationPage() {
   const lookupTimeouts = useRef({});
   const lastFetchedRollRef = useRef({});
   const initialSyncDoneRef = useRef(false);
+  const paymentSectionRef = useRef(null);
 
   const buildMembersWithLeader = useCallback((student, savedReg = null) => {
     const base = createInitialMembers();
-    const leadSource = savedReg?.teamLead || student || {};
+    const leadSource = savedReg?.teamLead || savedReg?.participants?.[0] || student || {};
     base[0] = {
       ...base[0],
       rollNo: String(leadSource.rollNo || leadSource.rollNumber || leadSource.roll || student?.roll || '').trim().toUpperCase(),
       name: String(leadSource.name || student?.name || '').trim(),
       email: String(leadSource.email || student?.email || '').trim().toLowerCase(),
       phone: String(leadSource.phone || leadSource.mobile || student?.mobile || '').trim(),
-      branch: leadSource.branch || student?.department || base[0].branch,
+      branch: leadSource.branch || leadSource.department || student?.department || base[0].branch,
       year: leadSource.year || student?.year || base[0].year
     };
 
@@ -378,9 +382,7 @@ export default function RegistrationPage() {
       const reg = state?.registration || null;
       const pay = state?.payment || null;
       const resolvedTeamName = String(reg?.teamName || student?.teamName || '').trim();
-      if (resolvedTeamName) {
-        setTeamName(resolvedTeamName);
-      }
+      setTeamName(resolvedTeamName);
 
       const { nextMembers, nextConfirmedCount } = buildMembersWithLeader(student, reg);
       setMembers(nextMembers);
@@ -391,15 +393,14 @@ export default function RegistrationPage() {
         if (reg.challengeId) setSelectedChallengeId(String(reg.challengeId));
       }
 
-      const isPaid = Boolean(
-        reg?.payment?.status === 'PAID' ||
-          reg?.status === 'CONFIRMED' ||
-          reg?.status === 'PAID' ||
-          pay?.status === 'PAID'
+      const isConfirmedAndPaid = Boolean(
+        state?.isConfirmedAndPaid ||
+        (String(reg?.status || '').toUpperCase() === 'CONFIRMED' &&
+          String(pay?.status || '').toUpperCase() === 'PAID')
       );
 
-      if (isPaid && (reg || pay)) {
-        const paidAtDate = pay?.paidAt || reg?.paidAt || reg?.payment?.paidAt || reg?.updated_at;
+      if (isConfirmedAndPaid && reg && pay) {
+        const paidAtDate = pay?.paidAt || reg?.paidAt || reg?.payment?.paidAt || reg?.updatedAt || reg?.updated_at;
         const timestamp = paidAtDate
           ? new Date(paidAtDate).toLocaleString('en-IN', {
               day: 'numeric',
@@ -410,8 +411,14 @@ export default function RegistrationPage() {
             })
           : new Date().toLocaleString('en-IN');
 
+        const resolvedAmount =
+          pay?.amountInPaise !== undefined && pay?.amountInPaise !== null
+            ? Math.round(Number(pay.amountInPaise) / 100)
+            : (pay?.amount || reg?.payment?.amount || reg?.fee?.amount || REGISTRATION_AMOUNT);
+
         setSubmittedData({
           regId: reg?.registrationNumber || pay?.registrationNumber || 'CONFIRMED',
+          teamId: reg?.teamId || reg?.meta?.teamId || reg?.registrationNumber || '',
           paymentReference: pay?.paymentReference || reg?.payment?.paymentReference || '',
           timestamp,
           teamName: resolvedTeamName || 'Registered Team',
@@ -423,9 +430,11 @@ export default function RegistrationPage() {
           members: nextMembers,
           razorpayOrderId: pay?.razorpay?.orderId || reg?.payment?.orderId || reg?.razorpayOrderId || '',
           razorpayPaymentId: pay?.razorpay?.paymentId || reg?.payment?.paymentId || reg?.razorpayPaymentId || '',
-          amount: pay?.amount || reg?.payment?.amount || reg?.fee?.amount || REGISTRATION_AMOUNT,
+          amount: resolvedAmount,
           status: 'PAID & CONFIRMED · VERIFIED VIA RAZORPAY'
         });
+      } else {
+        setSubmittedData(null);
       }
     },
     [buildMembersWithLeader]
@@ -482,6 +491,19 @@ export default function RegistrationPage() {
     };
   }, [initialChallengeId]);
 
+  // Warn user if they try to refresh or close the browser tab while payment/verification is in progress
+  useEffect(() => {
+    if (paymentStage === 'idle') return;
+    const handleBeforeUnload = (e) => {
+      e.preventDefault();
+      e.returnValue =
+        'Payment is currently in progress. Please wait until confirmation completes and do NOT refresh or close this page.';
+      return e.returnValue;
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [paymentStage]);
+
   // Restore & validate saved JWT token + Team Leader state across sessions/days
   useEffect(() => {
     const onAuthChanged = () => {
@@ -500,12 +522,20 @@ export default function RegistrationPage() {
     return () => window.removeEventListener('forensithon-auth-changed', onAuthChanged);
   }, [loggedInLeader]);
 
+  const loggedInRoll = loggedInLeader?.roll ? String(loggedInLeader.roll).trim().toUpperCase() : '';
+
   useEffect(() => {
-    if (!loggedInLeader || initialSyncDoneRef.current) return;
+    if (!loggedInRoll || initialSyncDoneRef.current) return;
     initialSyncDoneRef.current = true;
     let active = true;
+    setSyncingTeamState(true);
 
-    applyServerState(loggedInLeader, null, Boolean(initialChallengeId));
+    // Pre-fill leader slot immediately while saved 6-member draft/confirmed record loads from DB
+    const cachedLeader = getStoredTeamLeader() || loggedInLeader;
+    if (cachedLeader) {
+      applyServerState(cachedLeader, null, Boolean(initialChallengeId));
+    }
+
     refreshLoggedInStudent()
       .then(async (verifiedStudent) => {
         if (!active) return;
@@ -513,20 +543,28 @@ export default function RegistrationPage() {
           handleLogout();
           return;
         }
-        setLoggedInLeader(verifiedStudent);
-        const state = await fetchTeamLeaderState(verifiedStudent.roll).catch(() => null);
-        if (active && state) {
+        const rollToFetch = String(verifiedStudent.roll || loggedInRoll).trim().toUpperCase();
+        const state = await fetchTeamLeaderState(rollToFetch).catch(() => null);
+        if (!active) return;
+
+        setLoggedInLeader(state?.account || verifiedStudent);
+        if (state) {
           applyServerState(state.account || verifiedStudent, state, Boolean(initialChallengeId));
+        } else {
+          applyServerState(verifiedStudent, null, Boolean(initialChallengeId));
         }
       })
       .catch((err) => {
         console.warn('Could not sync Team Leader session:', err);
+      })
+      .finally(() => {
+        if (active) setSyncingTeamState(false);
       });
 
     return () => {
       active = false;
     };
-  }, [loggedInLeader, applyServerState, initialChallengeId]);
+  }, [loggedInRoll, applyServerState, initialChallengeId]);
 
   // Real-time student lookup from Unified Backend / ECAP API by Roll Number
   const triggerStudentLookup = async (index, rollToLookup, force = false) => {
@@ -667,13 +705,21 @@ export default function RegistrationPage() {
     confirmedCount >= 1 && isMemberComplete(members[0]) && String(members[0]?.phone || '').trim()
   );
 
+  // Track latest roll input & last auto-fetched roll so stale lookups never overwrite new roll details
+  const latestAuthRollRef = useRef('');
+  const lastAuthAutoFilledRollRef = useRef('');
+
   // Team Leader Roll No Auto-Fill in Register Tab
   const triggerAuthRollLookup = async (rollInput) => {
     const cleanRoll = (rollInput || '').trim().toUpperCase();
     if (!cleanRoll || cleanRoll.length < 5) return;
+    latestAuthRollRef.current = cleanRoll;
     setAuthLookupStatus({ status: 'loading', message: 'Fetching student...', studentName: '' });
     try {
       const student = await fetchStudentDetailsFromApi(cleanRoll);
+      // Ignore stale response if user already changed the Roll Number input
+      if (latestAuthRollRef.current !== cleanRoll) return;
+
       if (student && !student.error && (student.studentname || student.studentName || student.name)) {
         const studentName = (student.studentname || student.studentName || student.name || '').trim();
         const phone = (student.mobilenumber || student.MobileNumber || student.mobile || student.phone || student.fathermobilenumber || '').trim();
@@ -681,11 +727,12 @@ export default function RegistrationPage() {
         const mappedYear = mapSemesterToYear(student.semestername || student.semester || student.year, student.joinedbatch, student.coursename);
         const mappedBranch = mapStudentBranch('forensic', student.branch || student.department, student.coursename);
 
+        lastAuthAutoFilledRollRef.current = cleanRoll;
         setRegisterForm((prev) => ({
           ...prev,
-          name: studentName || prev.name,
-          email: rawEmail || prev.email,
-          mobile: phone || prev.mobile,
+          name: studentName || '',
+          email: rawEmail || '',
+          mobile: phone || '',
           branch: mappedBranch || prev.branch,
           year: mappedYear || prev.year,
           gender: student.gender || prev.gender
@@ -695,17 +742,34 @@ export default function RegistrationPage() {
         setAuthLookupStatus({ status: 'not_found', studentName: '', message: 'Not found — enter manually' });
       }
     } catch {
+      if (latestAuthRollRef.current !== cleanRoll) return;
       setAuthLookupStatus({ status: 'not_found', studentName: '', message: 'Manual entry available' });
     }
   };
 
   const handleRegisterRollChange = (val) => {
     const upper = val.toUpperCase();
-    setRegisterForm((prev) => ({ ...prev, rollNo: upper }));
+    const cleanUpper = upper.trim();
+    latestAuthRollRef.current = cleanUpper;
+
+    // If roll changed from a previously auto-filled student, clear old auto-filled personal fields
+    const shouldResetAutoFilled =
+      Boolean(lastAuthAutoFilledRollRef.current) && lastAuthAutoFilledRollRef.current !== cleanUpper;
+
+    if (shouldResetAutoFilled) {
+      lastAuthAutoFilledRollRef.current = '';
+    }
+
+    setRegisterForm((prev) => ({
+      ...prev,
+      rollNo: upper,
+      ...(shouldResetAutoFilled ? { name: '', email: '', mobile: '' } : {})
+    }));
+
     if (authLookupTimerRef.current) clearTimeout(authLookupTimerRef.current);
-    if (upper.trim().length >= 6) {
+    if (cleanUpper.length >= 6) {
       authLookupTimerRef.current = setTimeout(() => {
-        triggerAuthRollLookup(upper);
+        triggerAuthRollLookup(cleanUpper);
       }, 350);
     } else {
       setAuthLookupStatus({ status: 'idle', message: '', studentName: '' });
@@ -746,13 +810,19 @@ export default function RegistrationPage() {
         password: passwordVal
       });
 
-      // After registering as Team Leader, redirect to Login tab so they sign in with their credentials
+      const registeredRoll = String(student?.roll || rNo).trim().toUpperCase();
+      const registeredName = String(student?.name || fullName).trim();
+      const registeredTeam = String(student?.teamName || tName).trim();
+
+      // After registering as Team Leader, redirect to Login tab with THAT exact Roll Number
       setAuthMode('login');
-      setLoginForm({ identifier: student?.roll || rNo, password: '' });
+      setLoginForm({ identifier: registeredRoll, password: '' });
       setRegisterForm(createInitialRegisterForm());
+      latestAuthRollRef.current = '';
+      lastAuthAutoFilledRollRef.current = '';
       setAuthLookupStatus({ status: 'idle', message: '', studentName: '' });
       setAuthSuccess(
-        `Team "${student?.teamName || tName}" registered successfully! Please login below with ${student?.roll || rNo} and your password to add the remaining 5 team members.`
+        `Team "${registeredTeam}" registered successfully for ${registeredName} (${registeredRoll})! Please login below with Roll Number ${registeredRoll} and your password to add the remaining 5 team members.`
       );
     } catch (err) {
       setAuthError(err.message || 'Unable to register Team Leader.');
@@ -773,6 +843,19 @@ export default function RegistrationPage() {
 
     setAuthLoading(true);
     try {
+      // Clear any previous user's UI state before loading the newly logged-in user
+      setSubmittedData(null);
+      setTeamName('');
+      setMembers(createInitialMembers());
+      setConfirmedCount(0);
+      setEditingIdx(null);
+      setValidationErrors({});
+      setPaymentErrorMessage('');
+      setSaveNotice('');
+      setSaveError('');
+      lastFetchedRollRef.current = {};
+      setLookupStatuses(Array(6).fill({ status: 'idle', studentName: '', message: '' }));
+
       const { student } = await loginTeamLeaderAccount({ email: idVal, password: pwVal });
       initialSyncDoneRef.current = true;
       setLoggedInLeader(student);
@@ -780,8 +863,8 @@ export default function RegistrationPage() {
       applyServerState(student, serverState, Boolean(initialChallengeId));
       setSaveNotice(
         serverState?.registration
-          ? 'Welcome back! Your previously saved team details have been restored.'
-          : ''
+          ? `Welcome back, ${student.name} (${student.roll})! Your saved team details have been restored.`
+          : `Logged in as ${student.name} (${student.roll}). Add your remaining 5 team members below.`
       );
       setSaveError('');
     } catch (err) {
@@ -829,18 +912,19 @@ export default function RegistrationPage() {
       const domainNumber = Number(currentDomainInfo?.number) || 1;
       const domainLabel = currentDomainInfo?.name || currentDomainInfo?.title || selectedDomain || 'Forensithon';
 
-      const result = await saveTeamMembersDraft({
+      await saveTeamMembersDraft({
         teamName: cleanTeamName,
         domainId: domainNumber,
         domainCode: currentDomainInfo?.code || selectedDomain || '',
         domainTitle: domainLabel,
+        eventTitle: currentChallenge?.rawTitle || currentChallenge?.title || '',
+        slug: currentChallenge?.slug || '',
         challengeId: currentChallenge?.id || selectedChallengeId || '',
         challengeTitle: currentChallenge?.title || '',
         centralEventId: currentChallenge?.sourceType === 'central_event' ? currentChallenge?._id : null,
         forensicScope: currentChallenge?.forensic || currentChallenge?.descriptionText || '',
         technicalScope: currentChallenge?.technical || '',
         subFields: Array.isArray(currentChallenge?.subFields) ? currentChallenge.subFields : [],
-        amount: effectiveFeeAmount,
         members: nextMembersList.map((m, idx) => ({
           studentIndex: idx + 1,
           tier: m.tier,
@@ -961,7 +1045,9 @@ export default function RegistrationPage() {
       return;
     }
 
+    paymentHandlerTriggeredRef.current = false;
     setIsProcessingPayment(true);
+    setPaymentStage('creating_order');
     setPaymentErrorMessage('');
 
     try {
@@ -974,14 +1060,16 @@ export default function RegistrationPage() {
       const domainNumber = Number(currentDomainInfo?.number) || 1;
       const domainLabel = currentDomainInfo?.name || currentDomainInfo?.title || selectedDomain || 'Forensithon';
 
-      // 2. Call Unified Backend API to Create Order and save registration in central_event_student_registrations
+      // 2. Call Unified Backend API to Create Order — DO NOT send payment amount from frontend;
+      // backend matches the event in `central_events` and computes the official fee securely server-side.
       const orderPayload = {
-        amount: effectiveFeeAmount,
         teamName: teamName.trim(),
         teamId: loggedInLeader?.teamId || undefined,
         domainId: domainNumber,
         domainCode: currentDomainInfo?.code || selectedDomain || '',
         domainTitle: domainLabel,
+        eventTitle: currentChallenge.rawTitle || currentChallenge.title,
+        slug: currentChallenge.slug || '',
         challengeId: currentChallenge.id,
         challengeTitle: currentChallenge.title,
         centralEventId: currentChallenge?.sourceType === 'central_event' ? currentChallenge?._id : null,
@@ -1024,6 +1112,8 @@ export default function RegistrationPage() {
           color: '#ff5500' // Forensithon Orange
         },
         handler: async function (paymentResponse) {
+          paymentHandlerTriggeredRef.current = true;
+          setPaymentStage('verifying');
           try {
             // 4. Verify Payment with Backend API & Save to central_event_student_payments
             const verifyData = await verifyForensithonPayment({
@@ -1061,6 +1151,7 @@ export default function RegistrationPage() {
             };
 
             setSubmittedData(confirmedRecord);
+            setPaymentStage('idle');
             setIsProcessingPayment(false);
             window.scrollTo({ top: 0, behavior: 'smooth' });
           } catch (verifyError) {
@@ -1068,12 +1159,16 @@ export default function RegistrationPage() {
             setPaymentErrorMessage(
               `Payment was processed by Razorpay (ID: ${paymentResponse.razorpay_payment_id}), but verification returned: ${verifyError.message}`
             );
+            setPaymentStage('idle');
             setIsProcessingPayment(false);
           }
         },
         modal: {
           ondismiss: function () {
-            setIsProcessingPayment(false);
+            if (!paymentHandlerTriggeredRef.current) {
+              setPaymentStage('idle');
+              setIsProcessingPayment(false);
+            }
           }
         }
       };
@@ -1084,13 +1179,16 @@ export default function RegistrationPage() {
         setPaymentErrorMessage(
           failedResponse.error?.description || 'Payment was unsuccessful or cancelled by the user.'
         );
+        setPaymentStage('idle');
         setIsProcessingPayment(false);
       });
 
+      setPaymentStage('awaiting_checkout');
       razorpayInstance.open();
     } catch (err) {
       console.error('Registration/Payment Error:', err);
       setPaymentErrorMessage(err.message || 'An error occurred while connecting to the payment gateway.');
+      setPaymentStage('idle');
       setIsProcessingPayment(false);
     }
   };
@@ -1300,6 +1398,9 @@ export default function RegistrationPage() {
               >
                 Print Slip ⎙
               </button>
+              <Link to="/account" className="button secondary">
+                My Account Dashboard ↗
+              </Link>
               <button
                 type="button"
                 className="button secondary"
@@ -1717,13 +1818,33 @@ export default function RegistrationPage() {
                   {loggedInLeader.name} · {loggedInLeader.roll}
                 </h3>
                 <p className="leader-session-sub">
-                  Remaining Members Completed: <strong>{remainingFilledCount} / 5</strong> ·{' '}
-                  {allRemainingFiveFilled
-                    ? 'All 5 remaining members saved — Razorpay payment is unlocked!'
-                    : 'Fill and add all 5 remaining team members below to enable Razorpay payment.'}
+                  {syncingTeamState ? (
+                    <span>Syncing your saved team details from database...</span>
+                  ) : allRemainingFiveFilled ? (
+                    <>
+                      <strong>✓ All 6 team members are already saved in the database!</strong> Only payment is pending — proceed directly to Step 03 to pay via Razorpay.
+                    </>
+                  ) : (
+                    <>
+                      Remaining Members Completed: <strong>{remainingFilledCount} / 5</strong> ·{' '}
+                      Fill and add all 5 remaining team members below to enable Razorpay payment.
+                    </>
+                  )}
                 </p>
               </div>
-              <div className="leader-session-actions">
+              <div className="leader-session-actions" style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                {allRemainingFiveFilled && (
+                  <button
+                    type="button"
+                    className="button"
+                    onClick={() => paymentSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                  >
+                    Proceed to Payment (₹{effectiveFeeAmount}) ↓
+                  </button>
+                )}
+                <Link to="/account" className="button secondary">
+                  My Account Dashboard ↗
+                </Link>
                 <button
                   type="button"
                   className="button secondary"
@@ -2423,7 +2544,7 @@ export default function RegistrationPage() {
           </div>
 
           {/* STEP 3: Razorpay Payment Gateway & Submission */}
-          <div className="form-card-section">
+          <div className="form-card-section" id="payment-step-section" ref={paymentSectionRef}>
             <div className="form-card-header">
               <span className="step-num-badge">STEP 03</span>
               <div>
@@ -2435,9 +2556,11 @@ export default function RegistrationPage() {
             </div>
 
             <div className={`payment-gate-banner ${allRemainingFiveFilled ? 'payment-gate-banner--unlocked' : 'payment-gate-banner--locked'}`} data-error-key="remainingMembers">
-              {allRemainingFiveFilled ? (
+              {syncingTeamState ? (
+                <span>⏳ Loading your saved team members from the database...</span>
+              ) : allRemainingFiveFilled ? (
                 <span>
-                  ✓ All remaining 5 team members (Members 02–06) are filled and saved. Razorpay payment is now enabled!
+                  ✓ All 6 team members are already saved in the database! No need to re-fill participants — Razorpay payment is unlocked and ready.
                 </span>
               ) : (
                 <span>
@@ -2534,7 +2657,12 @@ export default function RegistrationPage() {
               >
                 {isProcessingPayment ? (
                   <span className="btn-loading-flex">
-                    <span className="spinner" /> Connecting to Razorpay Gateway...
+                    <span className="spinner" />{' '}
+                    {paymentStage === 'verifying'
+                      ? 'Verifying Payment & Confirming Team...'
+                      : paymentStage === 'awaiting_checkout'
+                      ? 'Waiting for Razorpay Payment...'
+                      : 'Connecting to Razorpay Gateway...'}
                   </span>
                 ) : !allRemainingFiveFilled ? (
                   `Pay ₹${effectiveFeeAmount} Disabled (${remainingFilledCount}/5 Remaining Members Filled)`
@@ -2544,7 +2672,7 @@ export default function RegistrationPage() {
               </button>
               <p className="submit-hint">
                 {allRemainingFiveFilled
-                  ? 'A secure Razorpay payment window will open. Upon payment verification, your team registration will be confirmed.'
+                  ? '⚠️ Please wait until payment verification completes. Do NOT refresh, press Back, or close this page until your confirmation slip is displayed.'
                   : 'Complete all remaining 5 members above in Step 02 to unlock the Razorpay payment button.'}
               </p>
             </div>
@@ -2553,6 +2681,77 @@ export default function RegistrationPage() {
           </>
         )}
       </section>
+
+      {/* Full-Screen Payment & Verification Loader Overlay (Visible until payment response succeeds) */}
+      {paymentStage !== 'idle' && (
+        <div
+          className="payment-processing-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-live="assertive"
+          aria-label="Payment processing in progress"
+        >
+          <div className="payment-processing-card">
+            <div className="payment-overlay-spinner-wrap" aria-hidden="true">
+              <div className="payment-overlay-spinner" />
+              <div className="payment-overlay-spinner-inner" />
+            </div>
+
+            <span className="payment-overlay-badge">
+              {paymentStage === 'verifying'
+                ? 'STEP 3 OF 3 · VERIFYING TRANSACTION'
+                : paymentStage === 'awaiting_checkout'
+                ? 'STEP 2 OF 3 · PAYMENT IN PROGRESS'
+                : 'STEP 1 OF 3 · INITIATING PAYMENT'}
+            </span>
+
+            <h2 className="payment-overlay-title">
+              {paymentStage === 'verifying'
+                ? 'Verifying Payment & Confirming Registration...'
+                : paymentStage === 'awaiting_checkout'
+                ? 'Waiting for Payment Completion...'
+                : 'Connecting to Razorpay Gateway...'}
+            </h2>
+
+            <p className="payment-overlay-subtitle">
+              {paymentStage === 'verifying'
+                ? 'Your payment has been received. Please wait while we verify your transaction with Razorpay and generate your official Forensithon registration receipt.'
+                : paymentStage === 'awaiting_checkout'
+                ? 'Complete your payment in the Razorpay window. Once paid, this screen will automatically verify and confirm your team registration.'
+                : 'Fetching official event fee from server and creating your secure Razorpay order.'}
+            </p>
+
+            <div className="payment-do-not-refresh-box">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                <line x1="12" y1="9" x2="12" y2="13" />
+                <line x1="12" y1="17" x2="12.01" y2="17" />
+              </svg>
+              <div>
+                <strong>Please wait until payment completes.</strong>
+                <span>Do NOT refresh, press Back, or close this page until you see the confirmation receipt.</span>
+              </div>
+            </div>
+
+            <div className="payment-stage-steps">
+              <div className={`payment-stage-step ${paymentStage === 'creating_order' ? 'active' : 'done'}`}>
+                <span className="stage-dot">{paymentStage === 'creating_order' ? '1' : '✓'}</span>
+                <span>Order Created</span>
+              </div>
+              <div className="stage-connector" />
+              <div className={`payment-stage-step ${paymentStage === 'awaiting_checkout' ? 'active' : paymentStage === 'verifying' ? 'done' : ''}`}>
+                <span className="stage-dot">{paymentStage === 'verifying' ? '✓' : '2'}</span>
+                <span>Razorpay Payment</span>
+              </div>
+              <div className="stage-connector" />
+              <div className={`payment-stage-step ${paymentStage === 'verifying' ? 'active' : ''}`}>
+                <span className="stage-dot">3</span>
+                <span>Confirm &amp; Receipt</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
