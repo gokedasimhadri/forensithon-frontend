@@ -42,45 +42,55 @@ export default function HomePage() {
             d="M210 395V285a90 90 0 0 1 180 0v95M230 395V285a70 70 0 0 1 140 0v95M250 410V285a50 50 0 0 1 100 0v95M270 425V285a30 30 0 0 1 60 0v95M290 435V285a10 10 0 0 1 20 0v95"
           />
         </svg>
-        <div className="hero-copy">
-
-
-          <h2>
-            FORENSI<span>THON</span>
-          </h2>
-          <p className="hero-event">9-10 December 2k26 · 6 students per team</p>
-          {/* <div className="ribbon">FORENSIC INNOVATION. REAL-TIME PROBLEM STATEMENTS.</div>
-           */}
-          <p className="eyebrow hero-kicker">FORENSIC INNOVATION HACKATHON</p>
-
-          <p className="header-organised">Organised by</p>
-          <p className="header-subtitle">
-            Department of Forensic Science, School of Sciences in collaboration with Institution's Innovation Council (IIC)
-          </p>
-          <p className="intro">Bring the science. Build the solution.</p>
-          <p className="hero-description">
-            An interdisciplinary hackathon for forensic thinkers and technical builders.
-          </p>
-          <div className="actions">
-            <Link className="button" to="/challenges">
-              Find your challenge <span aria-hidden="true">↗</span>
-            </Link>
-            <Link className="button secondary" to="/rounds">
-              Explore the rounds ↗
-            </Link>
+        <div className="hero-split-layout">
+          {/* LEFT: Investigators Persons Illustration */}
+          <div className="hero-visual-side">
+            <div className="hero-image-frame">
+              <img
+                width="1313"
+                height="875"
+                fetchPriority="high"
+                className="hero-team-img"
+                src={`${import.meta.env.BASE_URL}investigator-team.webp`}
+                alt="Illustration of four student investigators with a laptop, magnifier, camera and lab tools"
+              />
+              <span className="illustration-label">Conceptual illustration</span>
+            </div>
           </div>
-          <img
-            width="1313"
-            height="875"
-            fetchPriority="high"
-            className="hero-team"
-            src={`${import.meta.env.BASE_URL}investigator-team.webp`}
-            alt="Illustration of four student investigators with a laptop, magnifier, camera and lab tools"
-          />
-          <span className="illustration-label">Conceptual illustration</span>
+
+          {/* RIGHT: Text Details & Actions */}
+          <div className="hero-text-side">
+            <h1 className="hero-headline">
+              FORENSI<span>THON</span>
+            </h1>
+
+            <div className="hero-badges-row">
+              <span className="hero-event-badge">9-10 December 2k26 · 6 students per team</span>
+              <span className="hero-kicker-badge">FORENSIC INNOVATION HACKATHON</span>
+            </div>
+
+            <div className="hero-org-block">
+              <p className="hero-org-label">Organised by</p>
+              <p className="hero-org-name">
+                Department of Forensic Science, School of Sciences in collaboration with Institution's Innovation Council (IIC)
+              </p>
+            </div>
+
+            <p className="hero-tagline">Bring the science. Build the solution.</p>
+            <p className="hero-description">
+              An interdisciplinary hackathon for forensic thinkers and technical builders.
+            </p>
+
+            <div className="actions">
+              <Link className="button" to="/challenges">
+                Find your challenge <span aria-hidden="true">↗</span>
+              </Link>
+              <Link className="button secondary" to="/rounds">
+                Explore the rounds ↗
+              </Link>
+            </div>
+          </div>
         </div>
-        <div className="evidence-mark mark-one" aria-hidden="true">✳</div>
-        <div className="evidence-mark mark-two" aria-hidden="true">↗</div>
       </section>
 
       <div className="event-strip">
