@@ -207,20 +207,24 @@ function resolveStudentGender(student) {
   return 'Male';
 }
 
+const createInitialRegisterForm = () => ({
+  teamName: '',
+  rollNo: '',
+  name: '',
+  email: '',
+  mobile: '',
+  branch: 'B.Sc Forensic Science',
+  year: '3rd Year',
+  gender: 'Male',
+  password: ''
+});
+
 export default function LoginModal({ isOpen, onClose, initialMode = 'login', onSuccess }) {
   const [authMode, setAuthMode] = useState(initialMode || 'login'); // 'login' | 'register'
   const [showPassword, setShowPassword] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState('');
   const [authSuccess, setAuthSuccess] = useState('');
-
-  useEffect(() => {
-    if (isOpen) {
-      setAuthMode(initialMode || 'login');
-      setAuthError('');
-      setAuthSuccess('');
-    }
-  }, [isOpen, initialMode]);
 
   // Login form state
   const [loginForm, setLoginForm] = useState({
@@ -229,29 +233,31 @@ export default function LoginModal({ isOpen, onClose, initialMode = 'login', onS
   });
 
   // Register form state
-  const [registerForm, setRegisterForm] = useState({
-    teamName: '',
-    rollNo: '',
-    name: '',
-    email: '',
-    mobile: '',
-    branch: 'B.Sc Forensic Science',
-    year: '3rd Year',
-    gender: 'Male',
-    password: ''
-  });
+  const [registerForm, setRegisterForm] = useState(createInitialRegisterForm);
 
   const [lookupStatus, setLookupStatus] = useState({ status: 'idle', studentName: '', message: '' });
   const lookupTimerRef = useRef(null);
   const identifierInputRef = useRef(null);
 
-  // Sync mode and state when modal opens
+  const resetAllModalForms = () => {
+    setLoginForm({ identifier: '', password: '' });
+    setRegisterForm(createInitialRegisterForm());
+    setLookupStatus({ status: 'idle', studentName: '', message: '' });
+    setAuthError('');
+    setAuthSuccess('');
+    setShowPassword(false);
+  };
+
+  const handleModalClose = () => {
+    resetAllModalForms();
+    onClose?.();
+  };
+
+  // Sync mode and clear any cached form data whenever modal opens or closes
   useEffect(() => {
+    resetAllModalForms();
     if (isOpen) {
       setAuthMode(initialMode || 'login');
-      setAuthError('');
-      setAuthSuccess('');
-      setShowPassword(false);
       // Auto-focus the input after modal renders
       setTimeout(() => {
         identifierInputRef.current?.focus();
@@ -259,12 +265,21 @@ export default function LoginModal({ isOpen, onClose, initialMode = 'login', onS
     }
   }, [isOpen, initialMode]);
 
+  // Clear modal forms on any global logout or login event
+  useEffect(() => {
+    const handleAuthChange = () => {
+      resetAllModalForms();
+    };
+    window.addEventListener('forensithon-auth-changed', handleAuthChange);
+    return () => window.removeEventListener('forensithon-auth-changed', handleAuthChange);
+  }, []);
+
   // Handle ESC key and scroll lock on body
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
-        onClose?.();
+        handleModalClose();
       }
     };
     document.addEventListener('keydown', handleKeyDown);
@@ -383,11 +398,12 @@ export default function LoginModal({ isOpen, onClose, initialMode = 'login', onS
     try {
       const { student, token } = await loginTeamLeaderAccount({ email: idVal, password: pwVal });
       setAuthSuccess(`Welcome back, ${student.name || student.roll}!`);
+      resetAllModalForms();
       if (onSuccess) {
         onSuccess(student, token);
       }
       setTimeout(() => {
-        onClose?.();
+        handleModalClose();
       }, 400);
     } catch (err) {
       setAuthError(err.message || 'Invalid credentials. Please check your Roll Number/Email and password.');
@@ -435,7 +451,9 @@ export default function LoginModal({ isOpen, onClose, initialMode = 'login', onS
       });
 
       setAuthSuccess(`✓ Team Leader account created for ${fullName}! Please sign in below.`);
-      setLoginForm({ identifier: rNo, password: passwordVal });
+      setLoginForm({ identifier: rNo, password: '' });
+      setRegisterForm(createInitialRegisterForm());
+      setLookupStatus({ status: 'idle', studentName: '', message: '' });
       setAuthMode('login');
     } catch (err) {
       setAuthError(err.message || 'Unable to register Team Leader account.');
@@ -450,7 +468,7 @@ export default function LoginModal({ isOpen, onClose, initialMode = 'login', onS
     <div
       className="auth-modal-backdrop"
       onClick={(e) => {
-        if (e.target === e.currentTarget) onClose?.();
+        if (e.target === e.currentTarget) handleModalClose();
       }}
       role="dialog"
       aria-modal="true"
@@ -494,7 +512,7 @@ export default function LoginModal({ isOpen, onClose, initialMode = 'login', onS
             <button
               type="button"
               className="auth-modal-close-icon"
-              onClick={onClose}
+              onClick={handleModalClose}
               aria-label="Close login popup"
               title="Close (Esc)"
             >
