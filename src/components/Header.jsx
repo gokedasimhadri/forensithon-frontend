@@ -73,9 +73,16 @@ export default function Header({ motionOff, toggleMotion }) {
     };
   }, []);
 
+  const [loginModalMode, setLoginModalMode] = useState('login');
+
   // Listen to open-forensithon-login event from anywhere in the app
   useEffect(() => {
-    const handleOpenLogin = () => setIsLoginModalOpen(true);
+    const handleOpenLogin = (e) => {
+      if (e?.detail?.mode) {
+        setLoginModalMode(e.detail.mode);
+      }
+      setIsLoginModalOpen(true);
+    };
     window.addEventListener('open-forensithon-login', handleOpenLogin);
     return () => window.removeEventListener('open-forensithon-login', handleOpenLogin);
   }, []);
@@ -265,10 +272,17 @@ export default function Header({ motionOff, toggleMotion }) {
       <LoginModal
         isOpen={isLoginModalOpen}
         onClose={() => setIsLoginModalOpen(false)}
-        initialMode="login"
+        initialMode={loginModalMode}
         onSuccess={(student) => {
           setLoggedUser(student);
           setIsLoginModalOpen(false);
+          const targetChallenge = sessionStorage.getItem('forensithon_target_challenge');
+          if (targetChallenge) {
+            sessionStorage.removeItem('forensithon_target_challenge');
+            navigate(`/registration?challenge=${encodeURIComponent(targetChallenge)}`);
+          } else if (location.pathname !== '/registration') {
+            navigate('/registration');
+          }
         }}
       />
     </header>

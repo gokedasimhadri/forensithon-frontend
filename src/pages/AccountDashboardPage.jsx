@@ -75,7 +75,8 @@ export default function AccountDashboardPage() {
 
   // Validate session and load dashboard on mount / login change
   useEffect(() => {
-    if (!student?.roll) return;
+    const studentRoll = student?.roll || student?.rollNo;
+    if (!studentRoll) return;
     let active = true;
     refreshLoggedInStudent()
       .then((verified) => {
@@ -87,15 +88,15 @@ export default function AccountDashboardPage() {
           return;
         }
         setStudent(verified);
-        loadDashboard(verified.roll);
+        loadDashboard(verified.roll || verified.rollNo);
       })
       .catch(() => {
-        if (active) loadDashboard(student.roll);
+        if (active) loadDashboard(studentRoll);
       });
     return () => {
       active = false;
     };
-  }, [student?.roll, loadDashboard]);
+  }, [student?.roll, student?.rollNo, loadDashboard]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
