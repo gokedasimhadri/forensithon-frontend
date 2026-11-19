@@ -112,6 +112,7 @@ export default function AccountDashboardPage() {
         password: loginPassword
       });
       setStudent(loggedStudent);
+      setLoginIdentifier('');
       setLoginPassword('');
       await loadDashboard(loggedStudent.roll);
     } catch (err) {

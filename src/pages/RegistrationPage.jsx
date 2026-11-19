@@ -305,8 +305,8 @@ export const resolveStudentGender = (student) => {
   return 'Male';
 };
 
-const createInitialMembers = (leadStudent = null) => {
-  const leader = leadStudent || getStoredTeamLeader();
+const createInitialMembers = (leadStudent = undefined) => {
+  const leader = leadStudent !== undefined ? leadStudent : getStoredTeamLeader();
   const leadRoll = leader ? String(leader.roll || leader.rollNo || '').trim().toUpperCase() : '';
   const leadRawBranch = leader?.branch || leader?.department || '';
   const leadBranch = leadRoll
@@ -725,19 +725,8 @@ export default function RegistrationPage() {
         if (reg.challengeId) setSelectedChallengeId(String(reg.challengeId));
       }
 
-      const isConfirmedAndPaid = Boolean(
-        state?.isConfirmedAndPaid ||
-        serverPaidEvents.length > 0 ||
-        String(reg?.status || '').toUpperCase() === 'CONFIRMED' ||
-        String(reg?.payment?.status || '').toUpperCase() === 'PAID' ||
-        String(pay?.status || '').toUpperCase() === 'PAID'
-      );
-
-      if (isConfirmedAndPaid && reg) {
-        setSubmittedData(buildSubmittedPayload(reg, pay, nextMembers, resolvedTeamName));
-      } else {
-        setSubmittedData(null);
-      }
+      // Keep registration form open so team can register for another event
+      setSubmittedData(null);
     },
     [buildMembersWithLeader, buildSubmittedPayload]
   );
@@ -810,20 +799,42 @@ export default function RegistrationPage() {
   useEffect(() => {
     const onAuthChanged = () => {
       const current = getStoredTeamLeader();
-      if (!current && loggedInLeader) {
+      if (!current) {
         initialSyncDoneRef.current = false;
         setLoggedInLeader(null);
         setSubmittedData(null);
         setPaidEvents([]);
         setTeamName('');
-        setMembers(createInitialMembers());
+        setMembers(createInitialMembers(null));
         setConfirmedCount(0);
         setEditingIdx(null);
+        setAgreed(false);
+        setValidationErrors({});
+        setIsProcessingPayment(false);
+        setPaymentErrorMessage('');
+        setSaveNotice('');
+        setSaveError('');
+        lastFetchedRollRef.current = {};
+        setLookupStatuses(Array(6).fill({ status: 'idle', studentName: '', message: '' }));
+        setLoginForm({ identifier: '', password: '' });
+        setRegisterForm(createInitialRegisterForm());
+        latestAuthRollRef.current = '';
+        lastAuthAutoFilledRollRef.current = '';
+        setAuthLookupStatus({ status: 'idle', message: '', studentName: '' });
+        setAuthError('');
+        setAuthSuccess('');
       } else if (current) {
         setLoggedInLeader(current);
         const { nextMembers, nextConfirmedCount } = buildMembersWithLeader(current);
         setMembers(nextMembers);
         setConfirmedCount((prev) => Math.max(prev, nextConfirmedCount));
+        setLoginForm({ identifier: '', password: '' });
+        setRegisterForm(createInitialRegisterForm());
+        latestAuthRollRef.current = '';
+        lastAuthAutoFilledRollRef.current = '';
+        setAuthLookupStatus({ status: 'idle', message: '', studentName: '' });
+        setAuthError('');
+        setAuthSuccess('');
       }
     };
     window.addEventListener('forensithon-auth-changed', onAuthChanged);
@@ -1324,6 +1335,11 @@ export default function RegistrationPage() {
       setLookupStatuses(Array(6).fill({ status: 'idle', studentName: '', message: '' }));
 
       const { student } = await loginTeamLeaderAccount({ email: idVal, password: pwVal });
+      setLoginForm({ identifier: '', password: '' });
+      setRegisterForm(createInitialRegisterForm());
+      latestAuthRollRef.current = '';
+      lastAuthAutoFilledRollRef.current = '';
+      setAuthLookupStatus({ status: 'idle', message: '', studentName: '' });
       initialSyncDoneRef.current = true;
       setLoggedInLeader(student);
       const serverState = await fetchTeamLeaderState(student.roll).catch(() => null);
@@ -1357,11 +1373,16 @@ export default function RegistrationPage() {
     setPaymentErrorMessage('');
     setSaveNotice('');
     setSaveError('');
-    setMembers(createInitialMembers());
+    setMembers(createInitialMembers(null));
     setConfirmedCount(0);
     setEditingIdx(null);
     lastFetchedRollRef.current = {};
     setLookupStatuses(Array(6).fill({ status: 'idle', studentName: '', message: '' }));
+    setLoginForm({ identifier: '', password: '' });
+    setRegisterForm(createInitialRegisterForm());
+    latestAuthRollRef.current = '';
+    lastAuthAutoFilledRollRef.current = '';
+    setAuthLookupStatus({ status: 'idle', message: '', studentName: '' });
   };
 
   // Persist Team Name + Team Leader + Remaining 5 Members to central_event_student_registrations
