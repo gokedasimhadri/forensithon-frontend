@@ -11,8 +11,8 @@ export default function Footer() {
       <strong>FORENSITHON 2k26</strong>
       <p>School of Sciences × Institution's Innovation Council (IIC)</p>
       <div className="footer-links">
-        <Link to="/challenges">Challenge catalogue</Link>
         <Link to="/rounds">Rounds &amp; rules</Link>
+        <Link to="/challenges">Challenge catalogue</Link>
         <Link to="/registration">Registration</Link>
       </div>
     </footer>

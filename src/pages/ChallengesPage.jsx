@@ -4,7 +4,8 @@ import {
   fetchForensithonCatalog,
   getStoredTeamLeader,
   fetchTeamLeaderState,
-  findPaidEventForChallenge
+  findPaidEventForChallenge,
+  resolveImageUrl
 } from '../services/api';
 
 export default function ChallengesPage({ motionOff }) {
@@ -225,9 +226,43 @@ export default function ChallengesPage({ motionOff }) {
             {/* Unified Dynamic Domain / Track Navigation Hub (sorted by sortOrder) */}
             <nav className="track-nav-container" aria-label="Challenge Tracks">
               <div className="track-nav-scroll">
+                {/* Master "All Tracks" Tab Card */}
+                <button
+                  type="button"
+                  className={`track-tab track-tab--all ${selectedDomain === 'all' || !selectedDomain ? 'active' : ''}`}
+                  onClick={() => handleSelectDomain('all')}
+                  aria-pressed={selectedDomain === 'all' || !selectedDomain}
+                >
+                  <div className="track-tab-banner-wrapper track-tab-banner-wrapper--all">
+                    <div className="track-tab-all-icon" aria-hidden="true">
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="3" y="3" width="7" height="7" rx="1.5" />
+                        <rect x="14" y="3" width="7" height="7" rx="1.5" />
+                        <rect x="14" y="14" width="7" height="7" rx="1.5" />
+                        <rect x="3" y="14" width="7" height="7" rx="1.5" />
+                      </svg>
+                    </div>
+                    <div className="track-tab-floating-badges">
+                      <span className="track-tab-code">ALL</span>
+                      <span className="track-tab-count">{totalChallenges} Challenges</span>
+                    </div>
+                  </div>
+                  <div className="track-tab-info">
+                    <strong className="track-tab-name">All Tracks</strong>
+                    <div className="track-tab-footer">
+                      <span className="track-tab-range">{totalTracks} Forensic Tracks</span>
+                      {(selectedDomain === 'all' || !selectedDomain) && (
+                        <span className="track-tab-active-indicator">● SELECTED</span>
+                      )}
+                    </div>
+                  </div>
+                </button>
+
+                {/* Individual Category Track Cards with Backend Banner Image */}
                 {catalog.domains.map((dom) => {
                   const isActive =
-                    String(selectedDomain).toUpperCase() === String(dom.code).toUpperCase();
+                    selectedDomain && String(selectedDomain).toUpperCase() === String(dom.code).toUpperCase();
+                  const imgUrl = dom.bannerUrl || resolveImageUrl(dom.banner);
 
                   return (
                     <button
@@ -237,53 +272,134 @@ export default function ChallengesPage({ motionOff }) {
                       onClick={() => handleSelectDomain(dom.code)}
                       aria-pressed={isActive}
                     >
-                      <div className="track-tab-header">
-                        <span className="track-tab-code">{dom.code}</span>
-                        <span className="track-tab-count">{dom.count}</span>
+                      <div className={`track-tab-banner-wrapper track-tab-banner-wrapper--${dom.code.toLowerCase()}`}>
+                        {imgUrl ? (
+                          <img
+                            src={imgUrl}
+                            alt={`${dom.name} Banner`}
+                            className="track-tab-banner-img"
+                            loading="lazy"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                              e.currentTarget.parentElement?.classList.add('is-fallback');
+                            }}
+                          />
+                        ) : null}
+                        <div className="track-tab-banner-overlay" />
+                        <div className="track-tab-fallback-pattern" aria-hidden="true">
+                          <span className="fallback-watermark">{dom.code}</span>
+                        </div>
+                        <div className="track-tab-floating-badges">
+                          <span className="track-tab-code">{dom.code}</span>
+                          <span className="track-tab-count">{dom.count} Challenges</span>
+                        </div>
                       </div>
-                      <strong className="track-tab-name">{dom.name}</strong>
-                      <span className="track-tab-range">{dom.ids}</span>
+                      <div className="track-tab-info">
+                        <strong className="track-tab-name" title={dom.name}>{dom.name}</strong>
+                        <div className="track-tab-footer">
+                          <span className="track-tab-range">{dom.ids}</span>
+                          {isActive && (
+                            <span className="track-tab-active-indicator">● ACTIVE</span>
+                          )}
+                        </div>
+                      </div>
                     </button>
                   );
                 })}
               </div>
             </nav>
 
-            {/* Active Track Overview Banner */}
-            <div className="domain-context-card" ref={resultsRef}>
+            {/* Restructured Active Track Spotlight Hero Banner */}
+            <div className={`domain-context-card ${activeDomainObj ? 'domain-context-card--hero' : 'domain-context-card--all'}`} ref={resultsRef}>
               {activeDomainObj ? (
-                <>
-                  <div className="domain-context-top">
-                    <div className="context-track-badge">
-                      <span className="track-num">
-                        TRACK {String(activeDomainObj.number).padStart(2, '0')}
-                      </span>
-                      <span className="track-range">{activeDomainObj.ids}</span>
-                      <span className="track-status">
-                        {activeDomainObj.count} Challenge{activeDomainObj.count === 1 ? '' : 's'}
-                      </span>
+                <div className="domain-hero-layout">
+                  {/* Left Column: Track Banner Showcase */}
+                  <div className="domain-hero-media">
+                    <div className="domain-hero-poster">
+                      {(activeDomainObj.bannerUrl || resolveImageUrl(activeDomainObj.banner)) ? (
+                        <img
+                          src={activeDomainObj.bannerUrl || resolveImageUrl(activeDomainObj.banner)}
+                          alt={`${activeDomainObj.name} Official Banner`}
+                          className="domain-hero-poster-img"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                            e.currentTarget.parentElement?.classList.add('is-fallback');
+                          }}
+                        />
+                      ) : null}
+                      <div className="domain-hero-poster-overlay" />
+                      <div className="domain-hero-poster-fallback">
+                        <span className="hero-fallback-code">{activeDomainObj.code}</span>
+                      </div>
+                      <div className="domain-hero-poster-badge">
+                        <span className="poster-track-num">TRACK {String(activeDomainObj.number).padStart(2, '0')}</span>
+                        <span className="poster-track-code">{activeDomainObj.code}</span>
+                      </div>
                     </div>
-                    <button
-                      type="button"
-                      className="context-reset-btn"
-                      onClick={() => handleSelectDomain('all')}
-                    >
-                      View All Tracks ✕
-                    </button>
                   </div>
-                  <h2 className="domain-context-title">{activeDomainObj.title}</h2>
-                  <p className="domain-context-focus">
-                    <strong className="focus-label">Investigative Scope: </strong>
-                    {activeDomainObj.focus}
-                  </p>
-                </>
+
+                  {/* Right Column: Track Briefing & Scopes */}
+                  <div className="domain-hero-content">
+                    <div className="domain-context-top">
+                      <div className="context-track-badge">
+                        <span className="track-num">TRACK {String(activeDomainObj.number).padStart(2, '0')}</span>
+                        <span className="track-code-pill">{activeDomainObj.code}</span>
+                        <span className="track-range">{activeDomainObj.ids}</span>
+                        <span className="track-status">
+                          {activeDomainObj.count} Challenge{activeDomainObj.count === 1 ? '' : 's'}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        className="context-reset-btn"
+                        onClick={() => handleSelectDomain('all')}
+                        title="Show problem statements from all tracks"
+                      >
+                        View All Tracks ✕
+                      </button>
+                    </div>
+
+                    <h2 className="domain-context-title">{activeDomainObj.title}</h2>
+
+                    <div className="domain-context-scope-box">
+                      <div className="scope-box-header">
+                        <span className="scope-icon-dot" aria-hidden="true" />
+                        <span className="scope-box-label">INVESTIGATIVE SCOPE &amp; DOMAIN SPECIFICATION</span>
+                      </div>
+                      <p className="domain-context-focus">
+                        {activeDomainObj.focus}
+                      </p>
+                    </div>
+
+                    <div className="domain-hero-chips-bar">
+                      <span className="domain-meta-chip domain-meta-chip--squad">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                          <circle cx="9" cy="7" r="4" />
+                          <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                          <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                        </svg>
+                        Squad of 6: 2 Forensic + 2 Engineering + 2 Open Disciplines
+                      </span>
+                      {activeDomainObj.coordinators && activeDomainObj.coordinators.length > 0 ? (
+                        <span className="domain-meta-chip domain-meta-chip--coordinator">
+                          <span className="coord-avatar-dot" aria-hidden="true">👤</span>
+                          Faculty Lead: {activeDomainObj.coordinators.map(c => c.name || c.empId).filter(Boolean).join(', ')}
+                        </span>
+                      ) : activeDomainObj.coordinator?.name ? (
+                        <span className="domain-meta-chip domain-meta-chip--coordinator">
+                          <span className="coord-avatar-dot" aria-hidden="true">👤</span>
+                          Faculty Lead: {activeDomainObj.coordinator.name}
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
               ) : (
-                <>
+                <div className="domain-all-layout">
                   <div className="domain-context-top">
                     <div className="context-track-badge">
-                      <span className="track-num">
-                        ALL {totalTracks} TRACK{totalTracks === 1 ? '' : 'S'}
-                      </span>
+                      <span className="track-num">ALL {totalTracks} TRACKS</span>
                       <span className="track-range">
                         {catalog.domains.map((d) => d.code).join(' · ')}
                       </span>
@@ -292,11 +408,25 @@ export default function ChallengesPage({ motionOff }) {
                       </span>
                     </div>
                   </div>
-                  <h2 className="domain-context-title">Full Challenge Repository</h2>
+                  <h2 className="domain-context-title">Full Forensic Challenge Repository</h2>
                   <p className="domain-context-focus">
-                    Showing all {totalChallenges} published problem statement{totalChallenges === 1 ? '' : 's'} across {totalTracks} forensic discipline{totalTracks === 1 ? '' : 's'}. Use the track tabs above to filter by a specific track, or search below.
+                    Showing all <strong>{totalChallenges}</strong> published problem statement{totalChallenges === 1 ? '' : 's'} across <strong>{totalTracks}</strong> specialized forensic disciplines. Click on any track card above or quick-jump below to filter by a specific discipline.
                   </p>
-                </>
+                  <div className="domain-quick-chips">
+                    {catalog.domains.map((dom) => (
+                      <button
+                        key={dom.code}
+                        type="button"
+                        className="domain-quick-chip"
+                        onClick={() => handleSelectDomain(dom.code)}
+                      >
+                        <span className="quick-chip-code">{dom.code}</span>
+                        <span className="quick-chip-name">{dom.name}</span>
+                        <span className="quick-chip-count">{dom.count}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
               )}
             </div>
 

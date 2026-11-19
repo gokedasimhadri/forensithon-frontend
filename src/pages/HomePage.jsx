@@ -43,15 +43,20 @@ export default function HomePage() {
           />
         </svg>
         <div className="hero-copy">
-          <p className="eyebrow hero-kicker">FORENSIC INNOVATION HACKATHON</p>
-          <p className="hero-event">9-10 December 2k26 · 6 students per team</p>
-          <div className="case-stamp">
-            CASE FILE <strong>2k26</strong>
-          </div>
-          <h1>
+
+
+          <h2>
             FORENSI<span>THON</span>
-          </h1>
-          <div className="ribbon">FORENSIC INNOVATION. REAL-TIME PROBLEM STATEMENTS.</div>
+          </h2>
+          <p className="hero-event">9-10 December 2k26 · 6 students per team</p>
+          {/* <div className="ribbon">FORENSIC INNOVATION. REAL-TIME PROBLEM STATEMENTS.</div>
+           */}
+          <p className="eyebrow hero-kicker">FORENSIC INNOVATION HACKATHON</p>
+
+          <p className="header-organised">Organised by</p>
+          <p className="header-subtitle">
+            Department of Forensic Science, School of Sciences in collaboration with Institution's Innovation Council (IIC)
+          </p>
           <p className="intro">Bring the science. Build the solution.</p>
           <p className="hero-description">
             An interdisciplinary hackathon for forensic thinkers and technical builders.
@@ -211,7 +216,7 @@ export default function HomePage() {
                 Explore Live Challenges ↗
               </Link>
               <Link to="/registration" className="button secondary">
-                Register as Six →
+                Registration →
               </Link>
             </div>
           </div>

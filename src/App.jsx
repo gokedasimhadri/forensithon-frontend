@@ -36,6 +36,7 @@ export default function App() {
         <Route path="/rounds.html" element={<Navigate to="/rounds" replace />} />
         <Route path="/registration" element={<RegistrationPage />} />
         <Route path="/registration.html" element={<Navigate to="/registration" replace />} />
+        <Route path="/login" element={<Navigate to="/registration?auth=login" replace />} />
         <Route path="/account" element={<AccountDashboardPage />} />
         <Route path="/dashboard" element={<AccountDashboardPage />} />
         <Route path="*" element={<NotFoundPage />} />

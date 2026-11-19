@@ -24,6 +24,29 @@ export function buildApiUrl(path = '') {
   return API_BASE ? `${API_BASE}${cleanPath}` : cleanPath;
 }
 
+/**
+ * Safely resolves an image/banner URL from Central Events categories/events.
+ * Handles string URLs, object payloads ({ url, key }), absolute and relative paths.
+ */
+export function resolveImageUrl(banner) {
+  if (!banner) return '';
+  let url = '';
+  if (typeof banner === 'string') {
+    url = banner.trim();
+  } else if (typeof banner === 'object') {
+    url = (banner.url || banner.path || banner.imageUrl || banner.bannerUrl || '').trim();
+  }
+  if (!url) return '';
+  if (/^https?:\/\//i.test(url) || url.startsWith('data:') || url.startsWith('blob:')) {
+    return url;
+  }
+  const clean = url.startsWith('/') ? url : `/${url}`;
+  if (API_BASE && /^https?:\/\//i.test(API_BASE) && !API_BASE.includes('localhost:2221')) {
+    return `${API_BASE.replace(/\/+$/, '')}${clean}`;
+  }
+  return clean;
+}
+
 export async function apiFetch(endpoint, options = {}, timeoutMs = 10000) {
   const controller = new AbortController();
   const externalSignal = options.signal;
@@ -326,6 +349,7 @@ export async function fetchForensithonCatalog(typeCode = EVENT_TYPE) {
   const domains = rawCategories.map((cat, idx) => {
     const trackNumber = Number(cat.sortOrder) > 0 ? Number(cat.sortOrder) : idx + 1;
     const catCode = (cat.code || `T${trackNumber}`).toUpperCase();
+    const catBannerUrl = resolveImageUrl(cat.banner || cat.bannerUrl || cat.image || cat.imageUrl);
     const catEvents = challengesByCatIndex[idx] || [];
 
     // Sort events deterministically within track (explicit code/schedule/createdAt)
@@ -384,6 +408,7 @@ export async function fetchForensithonCatalog(typeCode = EVENT_TYPE) {
         categoryId: String(cat._id),
         categoryCode: catCode,
         categoryName: cat.name,
+        categoryBannerUrl: catBannerUrl,
         domain: trackNumber,
         domainSortOrder: Number(cat.sortOrder ?? trackNumber),
         forensic: parsed.forensic,
@@ -466,6 +491,7 @@ export async function fetchForensithonCatalog(typeCode = EVENT_TYPE) {
           categoryId: String(cat._id),
           categoryCode: catCode,
           categoryName: cat.name,
+          categoryBannerUrl: catBannerUrl,
           domain: trackNumber,
           domainSortOrder: Number(cat.sortOrder ?? trackNumber),
           forensic: forensicScope,
@@ -524,6 +550,8 @@ export async function fetchForensithonCatalog(typeCode = EVENT_TYPE) {
       focus: cat.description?.trim() ? cat.description.trim() : focusText,
       ids: idsRange,
       banner: cat.banner || null,
+      bannerUrl: catBannerUrl,
+      imageUrl: catBannerUrl,
       coordinator: cat.coordinator || null,
       coordinators: cat.coordinators || [],
       academicYear: cat.academicYear || '',
