@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import {
   fetchForensithonCatalog,
   getStoredTeamLeader,
@@ -9,6 +9,7 @@ import {
 } from '../services/api';
 
 export default function ChallengesPage({ motionOff }) {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const domainQuery = searchParams.get('domain');
 
@@ -22,6 +23,19 @@ export default function ChallengesPage({ motionOff }) {
   const [viewMode, setViewMode] = useState('detailed'); // 'detailed' | 'compact'
   const [expandedCards, setExpandedCards] = useState(new Set());
   const resultsRef = useRef(null);
+
+  const handleRegisterClick = (challengeId, e) => {
+    if (e) e.preventDefault();
+    const leader = getStoredTeamLeader();
+    if (!leader) {
+      sessionStorage.setItem('forensithon_target_challenge', challengeId);
+      window.dispatchEvent(new CustomEvent('open-forensithon-login', {
+        detail: { mode: 'login', targetChallenge: challengeId }
+      }));
+      return;
+    }
+    navigate(`/registration?challenge=${encodeURIComponent(challengeId)}`);
+  };
 
   // Sync logged-in student's PAID Forensithon events so already-paid events are locked from re-registration
   const loadPaidEvents = useCallback(async () => {
@@ -580,13 +594,14 @@ export default function ChallengesPage({ motionOff }) {
                               ✓ Registered · PAID
                             </span>
                           ) : (
-                            <Link
-                              to={`/registration?challenge=${encodeURIComponent(c.id)}`}
+                            <button
+                              type="button"
+                              onClick={(e) => handleRegisterClick(c.id, e)}
                               className="feed-card-register-btn"
                               title={`Select ${c.id} and proceed to registration`}
                             >
                               Register with {c.id} →
-                            </Link>
+                            </button>
                           )}
                         </div>
                       </div>
@@ -721,12 +736,14 @@ export default function ChallengesPage({ motionOff }) {
                               Already Paid ({paidRecord.teamId || paidRecord.registrationNumber}) · View Pass ↗
                             </Link>
                           ) : (
-                            <Link
-                              to={`/registration?challenge=${encodeURIComponent(c.id)}`}
+                            <button
+                              type="button"
+                              onClick={(e) => handleRegisterClick(c.id, e)}
                               className="feed-footer-link"
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', font: 'inherit', padding: 0 }}
                             >
                               Lock in this challenge ↗
-                            </Link>
+                            </button>
                           )}
                         </div>
                       </div>

@@ -214,6 +214,14 @@ export default function LoginModal({ isOpen, onClose, initialMode = 'login', onS
   const [authError, setAuthError] = useState('');
   const [authSuccess, setAuthSuccess] = useState('');
 
+  useEffect(() => {
+    if (isOpen) {
+      setAuthMode(initialMode || 'login');
+      setAuthError('');
+      setAuthSuccess('');
+    }
+  }, [isOpen, initialMode]);
+
   // Login form state
   const [loginForm, setLoginForm] = useState({
     identifier: '',

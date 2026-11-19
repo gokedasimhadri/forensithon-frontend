@@ -4954,6 +4954,43 @@ footer {
   color: #ffffff;
   font-size: 13px;
   border-top: 3px solid var(--orange);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 28px;
+}
+
+.footer-left {
+  flex: 1 1 320px;
+}
+
+.footer-right {
+  text-align: right;
+  flex: 0 0 auto;
+  padding-bottom: 2px;
+}
+
+.footer-credit-title {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.footer-credit-sub {
+  font-size: 13px;
+  color: #94a3b8;
+  margin-top: 5px;
+  font-weight: 500;
+}
+
+@media (max-width: 640px) {
+  .footer-right {
+    text-align: left;
+  }
 }
 
 footer .footer-logo {

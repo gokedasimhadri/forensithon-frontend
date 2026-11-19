@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import {
   fetchForensithonCatalog,
   fetchStudentByRollNumber,
@@ -64,6 +64,8 @@ export const determineTierFromBranch = (branchName = '') => {
   }
   if (
     b.includes('engineering') ||
+    b.includes('b.tech') ||
+    b.includes('btech') ||
     b.includes('computer') ||
     b.includes('cse') ||
     b.includes('it') ||
@@ -437,6 +439,7 @@ const loadRazorpayScript = () => {
 };
 
 export default function RegistrationPage() {
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const initialChallengeId = searchParams.get('challenge');
 
@@ -493,8 +496,19 @@ export default function RegistrationPage() {
   const lastFetchedRollRef = useRef({});
   const initialSyncDoneRef = useRef(false);
   const paymentSectionRef = useRef(null);
+  const unauthPromptFiredRef = useRef(false);
 
-  const buildMembersWithLeader = useCallback((student, savedReg = null) => {
+  // Automatically prompt login if user lands on registration page unauthenticated
+  useEffect(() => {
+    if (!loggedInLeader && !getStoredTeamLeader() && !unauthPromptFiredRef.current) {
+      unauthPromptFiredRef.current = true;
+      window.dispatchEvent(new CustomEvent('open-forensithon-login', {
+        detail: { mode: 'login' }
+      }));
+    }
+  }, [loggedInLeader]);
+
+  const buildMembersWithLeader = useCallback((student, savedReg = null, existingMembers = null) => {
     const activeLead = student || loggedInLeader || getStoredTeamLeader() || {};
     const rawSavedLead = savedReg?.teamLead || savedReg?.participants?.[0] || null;
     const hasValidSavedLead = Boolean(
@@ -554,11 +568,17 @@ export default function RegistrationPage() {
       tierTitle: getTierTitle(leadTier)
     };
 
+    const fallbackList = Array.isArray(existingMembers)
+      ? existingMembers.slice(1, 6)
+      : Array.isArray(members)
+        ? members.slice(1, 6)
+        : [];
+
     const remainingList = Array.isArray(savedReg?.teamMembers) && savedReg.teamMembers.length > 0
       ? savedReg.teamMembers
-      : Array.isArray(savedReg?.participants)
+      : Array.isArray(savedReg?.participants) && savedReg.participants.length > 1
         ? savedReg.participants.slice(1, 6)
-        : [];
+        : fallbackList;
 
     let consecutiveConfirmed = isMemberComplete(base[0]) ? 1 : 0;
     for (let i = 0; i < 5; i += 1) {
@@ -567,7 +587,7 @@ export default function RegistrationPage() {
         const slotRoll = String(slot.rollNo || slot.rollNumber || slot.roll || '').trim().toUpperCase();
         const slotRawBranch = slot.branch || slot.department || '';
         const slotBranch = resolveStudentBranch(slot, slotRoll) || slotRawBranch || base[i + 1].branch;
-        const slotTier = slot.tier || determineTierFromBranch(slotBranch);
+        const slotTier = (i >= 3) ? 'open' : (slot.tier || determineTierFromBranch(slotBranch));
         const slotYear = slot.year || resolveStudentYear(slot, slotRoll) || base[i + 1].year;
         const slotGender = slot.gender || resolveStudentGender(slot) || 'Male';
         base[i + 1] = {
@@ -589,7 +609,7 @@ export default function RegistrationPage() {
     }
 
     return { nextMembers: base, nextConfirmedCount: Math.max(1, consecutiveConfirmed) };
-  }, [loggedInLeader]);
+  }, [loggedInLeader, members]);
 
   const buildSubmittedPayload = useCallback(
     (reg, pay, membersList, resolvedTeamName) => {
@@ -814,20 +834,50 @@ export default function RegistrationPage() {
     };
   }, [loggedInLeader, buildMembersWithLeader]);
 
-  // Synchronize immediately if loggedInLeader is present but Member 01 is not set or has stale branch
+  // Synchronize Member 01 once on initial leader load if Member 01 roll number is empty
   useEffect(() => {
+    if (editingIdx !== null) return;
     const leader = loggedInLeader || getStoredTeamLeader();
     if (leader) {
       const leaderRoll = String(leader.roll || leader.rollNo || '').trim().toUpperCase();
-      const currentM0Roll = String(members[0]?.rollNo || '').trim().toUpperCase();
-      const currentM0Branch = members[0]?.branch || '';
-      if (!currentM0Roll || currentM0Roll !== leaderRoll || currentM0Branch === 'B.Sc Forensic Science') {
-        const { nextMembers, nextConfirmedCount } = buildMembersWithLeader(leader);
-        setMembers(nextMembers);
-        setConfirmedCount((prev) => Math.max(prev, nextConfirmedCount));
+      if (!leaderRoll) return;
+
+      if (leader.teamName && !teamName) {
+        setTeamName(leader.teamName);
       }
+
+      setMembers((prev) => {
+        const currentM0Roll = String(prev[0]?.rollNo || '').trim().toUpperCase();
+        // If Member 01 already has a roll number, never overwrite it!
+        if (currentM0Roll) return prev;
+
+        const leadRawBranch = leader.branch || leader.department || '';
+        const leadBranch = resolveStudentBranch(leader, leaderRoll) || leadRawBranch || 'Mechanical Engineering';
+        const leadTier = determineTierFromBranch(leadBranch);
+        const leadYear = leader.year || resolveStudentYear(leader, leaderRoll) || '4th Year';
+        const leadGender = leader.gender || resolveStudentGender(leader);
+        const leadName = String(leader.name || leader.studentname || leader.studentName || '').trim();
+        const leadEmail = String(leader.email || `${leaderRoll.toLowerCase()}@aditya.ac.in`).trim().toLowerCase();
+        const leadPhone = String(leader.phone || leader.mobile || '').trim();
+
+        const copy = [...prev];
+        copy[0] = {
+          ...copy[0],
+          rollNo: leaderRoll,
+          name: leadName,
+          email: leadEmail,
+          phone: leadPhone,
+          branch: leadBranch,
+          year: leadYear,
+          gender: leadGender,
+          tier: leadTier,
+          tierTitle: getTierTitle(leadTier)
+        };
+        return copy;
+      });
+      setConfirmedCount((prev) => Math.max(prev, 1));
     }
-  }, [loggedInLeader, members, buildMembersWithLeader]);
+  }, [loggedInLeader, editingIdx]);
 
   const loggedInRoll = loggedInLeader?.roll ? String(loggedInLeader.roll).trim().toUpperCase() : '';
 
@@ -914,7 +964,7 @@ export default function RegistrationPage() {
 
         const mappedBranch = resolveStudentBranch(student, cleanRoll);
         const mappedYear = resolveStudentYear(student, cleanRoll);
-        const mappedTier = determineTierFromBranch(mappedBranch);
+        const mappedTier = (index >= 4) ? 'open' : determineTierFromBranch(mappedBranch);
         const mappedGender = resolveStudentGender(student);
 
         setMembers((prev) => {
@@ -957,7 +1007,7 @@ export default function RegistrationPage() {
       } else {
         const fallbackBranch = resolveStudentBranch(null, cleanRoll);
         const fallbackYear = resolveStudentYear(null, cleanRoll);
-        const fallbackTier = determineTierFromBranch(fallbackBranch);
+        const fallbackTier = (index >= 4) ? 'open' : determineTierFromBranch(fallbackBranch);
 
         setMembers((prev) => {
           const copy = [...prev];
@@ -1052,17 +1102,34 @@ export default function RegistrationPage() {
       .filter((m, offset) => offset + 1 < confirmedCount && isMemberComplete(m)).length;
   }, [members, confirmedCount]);
 
-  // Live tier counts across confirmed members (Any order allowed: 2 Forensic + 2 Engineering + 2 Open = 6)
+  // Live tier counts across confirmed members:
+  // Members 5 and 6 (idx 4 and 5) are Open Discipline slots (can be any branch, including Forensic or Engineering).
+  // Squad composition requires at least 2 Forensic and at least 2 Engineering, with any remaining members satisfying Open Discipline.
   const confirmedTierCounts = useMemo(() => {
-    let forensic = 0;
-    let engineering = 0;
-    let open = 0;
-    members.slice(0, confirmedCount).forEach((m) => {
-      const tier = m.tier || determineTierFromBranch(m.branch);
-      if (tier === 'forensic') forensic += 1;
-      else if (tier === 'engineering') engineering += 1;
-      else if (tier === 'open') open += 1;
+    let totalForensic = 0;
+    let totalEngineering = 0;
+    let totalOpenOnly = 0;
+
+    members.slice(0, confirmedCount).forEach((m, idx) => {
+      // Slots 5 and 6 (idx 4 and 5) or explicit 'open' tier are Open Discipline
+      if (idx >= 4 || m.tier === 'open') {
+        totalOpenOnly += 1;
+        return;
+      }
+      const t = determineTierFromBranch(m.branch);
+      if (t === 'forensic') totalForensic += 1;
+      else if (t === 'engineering') totalEngineering += 1;
+      else totalOpenOnly += 1;
     });
+
+    const forensic = Math.min(2, totalForensic);
+    const engineering = Math.min(2, totalEngineering);
+    const availableForOpen =
+      Math.max(0, totalForensic - forensic) +
+      Math.max(0, totalEngineering - engineering) +
+      totalOpenOnly;
+    const open = Math.min(2, availableForOpen);
+
     return { forensic, engineering, open };
   }, [members, confirmedCount]);
 
@@ -1362,7 +1429,7 @@ export default function RegistrationPage() {
       const updated = { ...prevMember, [field]: value };
 
       if (field === 'branch') {
-        const newTier = determineTierFromBranch(value);
+        const newTier = (index >= 4) ? 'open' : determineTierFromBranch(value);
         updated.tier = newTier;
         updated.tierTitle = getTierTitle(newTier);
       }
@@ -1378,7 +1445,7 @@ export default function RegistrationPage() {
           const autoBranch = resolveStudentBranch(null, cleanRoll);
           if (autoBranch) {
             updated.branch = autoBranch;
-            updated.tier = determineTierFromBranch(autoBranch);
+            updated.tier = (index >= 4) ? 'open' : determineTierFromBranch(autoBranch);
             updated.tierTitle = getTierTitle(updated.tier);
           }
         }
@@ -1678,7 +1745,25 @@ export default function RegistrationPage() {
             ]);
             setPaymentStage('idle');
             setIsProcessingPayment(false);
-            window.scrollTo({ top: 0, behavior: 'smooth' });
+
+            // Update stored team leader with latest team name & profile
+            const currentLeader = getStoredTeamLeader() || {};
+            const leadRoll = currentLeader.roll || currentLeader.rollNo || members[0]?.rollNo;
+            if (leadRoll) {
+              saveStoredTeamLeader({
+                ...currentLeader,
+                roll: leadRoll,
+                rollNo: leadRoll,
+                name: currentLeader.name || members[0]?.name,
+                email: currentLeader.email || members[0]?.email,
+                mobile: currentLeader.mobile || members[0]?.phone,
+                phone: currentLeader.phone || members[0]?.phone,
+                teamName: teamName.trim()
+              });
+            }
+
+            // Immediately redirect to Account Dashboard page showing Confirmed Registrations & Paid Receipts
+            navigate('/account');
           } catch (verifyError) {
             console.error('Verification error:', verifyError);
             setPaymentErrorMessage(
@@ -2357,23 +2442,14 @@ export default function RegistrationPage() {
                       {members.map((m, idx) => {
                         const isConfirmed = idx < confirmedCount;
                         const isCurrent = editingIdx !== null ? idx === editingIdx : idx === confirmedCount;
-                        const tierDot = m.tier === 'forensic' ? '#1e3a5f' : m.tier === 'engineering' ? '#1a4731' : '#4a1942';
+                        const stepTier = (idx >= 4) ? 'open' : (m.tier || determineTierFromBranch(m.branch));
+                        const tierDot = stepTier === 'forensic' ? '#1e3a5f' : stepTier === 'engineering' ? '#1a4731' : '#4a1942';
                         return (
                           <div
                             key={idx}
                             className={`progress-step ${isConfirmed && editingIdx !== idx ? 'progress-step--done' : isCurrent ? 'progress-step--active' : ''}`}
                             onClick={() => {
                               if (isConfirmed) {
-                                if (idx === 0) {
-                                  const leader = loggedInLeader || getStoredTeamLeader();
-                                  if (leader) {
-                                    const lRoll = String(leader.roll || leader.rollNo || '').trim().toUpperCase();
-                                    if (!members[0]?.rollNo || members[0]?.rollNo !== lRoll || members[0]?.branch === 'B.Sc Forensic Science') {
-                                      const { nextMembers } = buildMembersWithLeader(leader);
-                                      setMembers(nextMembers);
-                                    }
-                                  }
-                                }
                                 setEditingIdx(idx);
                               }
                             }}
@@ -2407,7 +2483,7 @@ export default function RegistrationPage() {
                     {confirmedCount > 0 && (
                       <div className="added-members-list">
                         {members.slice(0, confirmedCount).map((m, idx) => {
-                          const currentTier = m.tier || determineTierFromBranch(m.branch);
+                          const currentTier = (idx >= 4) ? 'open' : (m.tier || determineTierFromBranch(m.branch));
                           const isForensic = currentTier === 'forensic';
                           const isEngineering = currentTier === 'engineering';
                           const tierLabel = isForensic
@@ -2441,16 +2517,14 @@ export default function RegistrationPage() {
                                 return;
                               }
 
-                              const memberTier = determineTierFromBranch(m.branch);
-                              setMembers((prev) => {
-                                const copy = [...prev];
-                                copy[idx] = {
-                                  ...copy[idx],
-                                  tier: memberTier,
-                                  tierTitle: getTierTitle(memberTier)
-                                };
-                                return copy;
-                              });
+                              const memberTier = (idx >= 4) ? 'open' : determineTierFromBranch(m.branch);
+                              const updatedMembers = [...members];
+                              updatedMembers[idx] = {
+                                ...updatedMembers[idx],
+                                tier: memberTier,
+                                tierTitle: getTierTitle(memberTier)
+                              };
+                              setMembers(updatedMembers);
 
                               // If saving Team Leader (idx 0), sync the updated data to loggedInLeader state and localStorage
                               if (idx === 0) {
@@ -2476,7 +2550,7 @@ export default function RegistrationPage() {
                                 return next;
                               });
                               setEditingIdx(null);
-                              persistTeamDraft(members, teamName);
+                              persistTeamDraft(updatedMembers, teamName);
                             };
 
                             return (
@@ -2673,19 +2747,20 @@ export default function RegistrationPage() {
                           }
 
                           // Closed summary row
+                          const memberDisplayTier = (idx >= 4) ? 'open' : (m.tier || determineTierFromBranch(m.branch));
                           const tierColors = { forensic: '#1e3a5f', engineering: '#1a4731', open: '#4a1942' };
                           const tierLabels = { forensic: 'Forensic', engineering: 'Engineering', open: 'Open' };
                           return (
                             <div
                               key={idx}
                               className="added-member-row"
-                              style={{ borderLeft: `4px solid ${tierColors[m.tier] || '#ff5500'}` }}
+                              style={{ borderLeft: `4px solid ${tierColors[memberDisplayTier] || '#ff5500'}` }}
                             >
                               <span className="added-member-num">{String(idx + 1).padStart(2, '0')}</span>
                               <div className="added-member-info">
                                 <strong>{m.name || '—'}</strong>
                                 <span>
-                                  {m.rollNo || '—'} · {m.gender || 'Male'} · {tierLabels[m.tier]} · {m.branch} · {m.year}
+                                  {m.rollNo || '—'} · {m.gender || 'Male'} · {tierLabels[memberDisplayTier]} · {m.branch} · {m.year}
                                   {m.phone ? ` · ${m.phone}` : ''}
                                 </span>
                               </div>
@@ -2698,16 +2773,6 @@ export default function RegistrationPage() {
                                 type="button"
                                 className="member-edit-btn"
                                 onClick={() => {
-                                  if (idx === 0) {
-                                    const leader = loggedInLeader || getStoredTeamLeader();
-                                    if (leader) {
-                                      const lRoll = String(leader.roll || leader.rollNo || '').trim().toUpperCase();
-                                      if (!members[0]?.rollNo || members[0]?.rollNo !== lRoll || members[0]?.branch === 'B.Sc Forensic Science') {
-                                        const { nextMembers } = buildMembersWithLeader(leader);
-                                        setMembers(nextMembers);
-                                      }
-                                    }
-                                  }
                                   setEditingIdx(idx);
                                 }}
                                 title={`Edit Member ${idx + 1}`}
@@ -2729,11 +2794,65 @@ export default function RegistrationPage() {
                       </div>
                     )}
 
-                    {/* Form to add next new member (shown only when not currently editing an earlier member) */}
-                    {confirmedCount < 6 && editingIdx === null && (() => {
+                    {/* If NOT logged in, require Team Leader login / registration first */}
+                    {!loggedInLeader && (
+                      <div className="leader-login-required-card" style={{
+                        background: '#0d1117',
+                        border: '2px dashed #ff5500',
+                        borderRadius: '12px',
+                        padding: '32px 24px',
+                        textAlign: 'center',
+                        margin: '20px 0'
+                      }}>
+                        <div style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          width: '54px',
+                          height: '54px',
+                          borderRadius: '50%',
+                          background: 'rgba(255, 85, 0, 0.15)',
+                          color: '#ff5500',
+                          marginBottom: '16px'
+                        }}>
+                          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                            <circle cx="8.5" cy="7" r="4" />
+                            <polyline points="17 11 19 13 23 9" />
+                          </svg>
+                        </div>
+                        <h3 style={{ color: '#fff', fontSize: '20px', margin: '0 0 8px', fontFamily: 'var(--font-display)' }}>
+                          Team Leader Registration / Login Required
+                        </h3>
+                        <p style={{ color: '#94a3b8', fontSize: '14px', maxWidth: '580px', margin: '0 auto 20px', lineHeight: 1.6 }}>
+                          First, the <strong>Team Leader</strong> must register or sign in to create the team. Once signed in, your profile is automatically confirmed as Member 01 at the top, and you can add the remaining 5 team members.
+                        </p>
+                        <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                          <button
+                            type="button"
+                            className="button"
+                            style={{ minHeight: '44px', padding: '10px 24px', fontWeight: 700 }}
+                            onClick={() => window.dispatchEvent(new CustomEvent('open-forensithon-login', { detail: { mode: 'login' } }))}
+                          >
+                            Login to Team Portal →
+                          </button>
+                          <button
+                            type="button"
+                            className="button secondary"
+                            style={{ minHeight: '44px', padding: '10px 24px' }}
+                            onClick={() => window.dispatchEvent(new CustomEvent('open-forensithon-login', { detail: { mode: 'register' } }))}
+                          >
+                            Register as Team Leader ✎
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Form to add next new member (shown only when logged in and not currently editing an earlier member) */}
+                    {loggedInLeader && confirmedCount < 6 && editingIdx === null && (() => {
                       const idx = confirmedCount;
                       const m = members[idx];
-                      const currentTier = m.tier || determineTierFromBranch(m.branch);
+                      const currentTier = (idx >= 4) ? 'open' : (m.tier || determineTierFromBranch(m.branch));
                       const isForensic = currentTier === 'forensic';
                       const isEngineering = currentTier === 'engineering';
                       const tierLabel = isForensic
@@ -2774,8 +2893,17 @@ export default function RegistrationPage() {
                           delete next.remainingMembers;
                           return next;
                         });
+
+                        const memberTier = (idx >= 4) ? 'open' : determineTierFromBranch(m.branch);
+                        const updatedMembers = [...members];
+                        updatedMembers[idx] = {
+                          ...updatedMembers[idx],
+                          tier: memberTier,
+                          tierTitle: getTierTitle(memberTier)
+                        };
+                        setMembers(updatedMembers);
                         setConfirmedCount((prev) => Math.max(prev, idx + 1));
-                        persistTeamDraft(members, teamName);
+                        persistTeamDraft(updatedMembers, teamName);
                       };
 
                       const isLastMember = idx === 5;
