@@ -203,7 +203,7 @@ export default function ChallengesPage({ motionOff }) {
             {totalTracks > 0 ? (
               <>
                 Forensithon 2k26 features <strong>{totalChallenges}</strong> live problem statement
-                {totalChallenges === 1 ? '' : 's'} across <strong>{totalTracks}</strong> specialized forensic track
+                {totalChallenges === 1 ? '' : 's'} across <strong>{totalTracks}</strong> specialized forensic domain
                 {totalTracks === 1 ? '' : 's'}. Every team selects <strong>one challenge</strong>.
               </>
             ) : (
@@ -217,7 +217,7 @@ export default function ChallengesPage({ motionOff }) {
         {loading ? (
           <div className="no-challenges-state" style={{ marginTop: '24px' }}>
             <div className="lookup-spinner" style={{ width: '28px', height: '28px', margin: '0 auto 12px' }} />
-            <h3>Loading Central Events Tracks &amp; Challenges...</h3>
+            <h3>Loading Central Events Domains &amp; Challenges...</h3>
             <p>Fetching live Forensithon categories and problem statements from Unified Backend.</p>
           </div>
         ) : error ? (
@@ -232,13 +232,13 @@ export default function ChallengesPage({ motionOff }) {
         ) : catalog.domains.length === 0 ? (
           <div className="no-challenges-state" style={{ marginTop: '24px' }}>
             <div className="no-challenges-icon" aria-hidden="true">📂</div>
-            <h3>No Forensithon tracks configured yet</h3>
-            <p>Add Event Categories under Central Events (FORENSITHON) in the Unified Portal to display tracks here.</p>
+            <h3>No Forensithon domains configured yet</h3>
+            <p>Add Event Categories under Central Events (FORENSITHON) in the Unified Portal to display domains here.</p>
           </div>
         ) : (
           <>
             {/* Unified Dynamic Domain / Track Navigation Hub (sorted by sortOrder) */}
-            <nav className="track-nav-container" aria-label="Challenge Tracks">
+            <nav className="track-nav-container" aria-label="Challenge Domains">
               <div className="track-nav-scroll">
                 {/* Master "All Tracks" Tab Card */}
                 <button
@@ -262,9 +262,9 @@ export default function ChallengesPage({ motionOff }) {
                     </div>
                   </div>
                   <div className="track-tab-info">
-                    <strong className="track-tab-name">All Tracks</strong>
+                    <strong className="track-tab-name">All Domains</strong>
                     <div className="track-tab-footer">
-                      <span className="track-tab-range">{totalTracks} Forensic Tracks</span>
+                      <span className="track-tab-range">{totalTracks} Forensic Domains</span>
                       {(selectedDomain === 'all' || !selectedDomain) && (
                         <span className="track-tab-active-indicator">● SELECTED</span>
                       )}
@@ -346,7 +346,7 @@ export default function ChallengesPage({ motionOff }) {
                         <span className="hero-fallback-code">{activeDomainObj.code}</span>
                       </div>
                       <div className="domain-hero-poster-badge">
-                        <span className="poster-track-num">TRACK {String(activeDomainObj.number).padStart(2, '0')}</span>
+                        <span className="poster-track-num">DOMAIN {String(activeDomainObj.number).padStart(2, '0')}</span>
                         <span className="poster-track-code">{activeDomainObj.code}</span>
                       </div>
                     </div>
@@ -356,7 +356,7 @@ export default function ChallengesPage({ motionOff }) {
                   <div className="domain-hero-content">
                     <div className="domain-context-top">
                       <div className="context-track-badge">
-                        <span className="track-num">TRACK {String(activeDomainObj.number).padStart(2, '0')}</span>
+                        <span className="track-num">DOMAIN {String(activeDomainObj.number).padStart(2, '0')}</span>
                         <span className="track-code-pill">{activeDomainObj.code}</span>
                         <span className="track-range">{activeDomainObj.ids}</span>
                         <span className="track-status">
@@ -367,9 +367,9 @@ export default function ChallengesPage({ motionOff }) {
                         type="button"
                         className="context-reset-btn"
                         onClick={() => handleSelectDomain('all')}
-                        title="Show problem statements from all tracks"
+                        title="Show problem statements from all domains"
                       >
-                        View All Tracks ✕
+                        View All Domains ✕
                       </button>
                     </div>
 
@@ -393,7 +393,7 @@ export default function ChallengesPage({ motionOff }) {
                           <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
                           <path d="M16 3.13a4 4 0 0 1 0 7.75" />
                         </svg>
-                        Squad of 6: 2 Forensic + 2 Engineering + 2 Open Disciplines
+                        Team of 6: 2 Forensic + 2 Engineering + 2 Open Disciplines
                       </span>
                       {activeDomainObj.coordinators && activeDomainObj.coordinators.length > 0 ? (
                         <span className="domain-meta-chip domain-meta-chip--coordinator">
@@ -413,7 +413,7 @@ export default function ChallengesPage({ motionOff }) {
                 <div className="domain-all-layout">
                   <div className="domain-context-top">
                     <div className="context-track-badge">
-                      <span className="track-num">ALL {totalTracks} TRACKS</span>
+                      <span className="track-num">ALL {totalTracks} DOMAINS</span>
                       <span className="track-range">
                         {catalog.domains.map((d) => d.code).join(' · ')}
                       </span>
@@ -424,7 +424,7 @@ export default function ChallengesPage({ motionOff }) {
                   </div>
                   <h2 className="domain-context-title">Full Forensic Challenge Repository</h2>
                   <p className="domain-context-focus">
-                    Showing all <strong>{totalChallenges}</strong> published problem statement{totalChallenges === 1 ? '' : 's'} across <strong>{totalTracks}</strong> specialized forensic disciplines. Click on any track card above or quick-jump below to filter by a specific discipline.
+                    Showing all <strong>{totalChallenges}</strong> published problem statement{totalChallenges === 1 ? '' : 's'} across <strong>{totalTracks}</strong> specialized forensic disciplines. Click on any domain card above or quick-jump below to filter by a specific discipline.
                   </p>
                   <div className="domain-quick-chips">
                     {catalog.domains.map((dom) => (
@@ -538,11 +538,11 @@ export default function ChallengesPage({ motionOff }) {
                 <h3>
                   {search
                     ? 'No problem statements match your search'
-                    : `No problem statements added under ${activeDomainObj?.name || 'this track'} yet`}
+                    : `No problem statements added under ${activeDomainObj?.name || 'this domain'} yet`}
                 </h3>
                 <p>
                   {search
-                    ? 'Try searching for a different keyword or switch to another track.'
+                    ? 'Try searching for a different keyword or switch to another domain.'
                     : 'Any Central Event published under this category in the Unified Portal will automatically appear here.'}
                 </p>
                 {selectedDomain !== 'all' && totalChallenges > 0 ? (
