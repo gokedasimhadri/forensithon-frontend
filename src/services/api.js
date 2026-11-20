@@ -386,12 +386,12 @@ export async function fetchForensithonCatalog(typeCode = EVENT_TYPE) {
         squadLabel = explicitRules.join(' • ');
       } else if (teamType === 'TEAM' || minTeam > 1) {
         squadLabel = (minTeam === 6 && maxTeam === 6)
-          ? 'Squad of 6: 2 Forensic/CSDF + 2 Engineering + 2 Open Disciplines'
+          ? 'Team of 6: 2 Forensic/CSDF + 2 Engineering + 2 Open Disciplines'
           : minTeam === maxTeam
             ? `Team of ${minTeam} participants`
             : `Team of ${minTeam}–${maxTeam} participants`;
       } else {
-        squadLabel = 'Squad of 6: 2 Forensic/CSDF + 2 Engineering + 2 Open Disciplines';
+        squadLabel = 'Team of 6: 2 Forensic/CSDF + 2 Engineering + 2 Open Disciplines';
       }
 
       const eventSubFields = [];
@@ -505,7 +505,7 @@ export async function fetchForensithonCatalog(typeCode = EVENT_TYPE) {
           participation: { type: 'TEAM', minTeamSize: 6, maxTeamSize: 6 },
           squadLabel: (Array.isArray(sub.rules) && sub.rules.filter(Boolean).length > 0)
             ? sub.rules.filter(Boolean).join(' • ')
-            : 'Squad of 6: 2 Forensic/CSDF + 2 Engineering + 2 Open Disciplines',
+            : 'Team of 6: 2 Forensic/CSDF + 2 Engineering + 2 Open Disciplines',
           feeRupees: null,
           mode: 'OFFLINE',
           venueName: '',
@@ -524,7 +524,7 @@ export async function fetchForensithonCatalog(typeCode = EVENT_TYPE) {
     const combinedChallenges = [...mappedEvents, ...mappedSubcategories];
     combinedChallenges.forEach((item) => normalizedChallenges.push(item));
 
-    let idsRange = `${catCode} Track`;
+    let idsRange = `${catCode} Domain`;
     if (combinedChallenges.length === 1) {
       idsRange = combinedChallenges[0].id;
     } else if (combinedChallenges.length > 1) {
