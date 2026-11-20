@@ -65,7 +65,7 @@ export default function HomePage() {
             </h1>
 
             <div className="hero-badges-row">
-              <span className="hero-event-badge">9-10 December 2k26 · 6 students per team</span>
+              <span className="hero-event-badge">9-10 December 2k26 · Team size 6</span>
               <span className="hero-kicker-badge">FORENSIC INNOVATION HACKATHON</span>
             </div>
 
@@ -99,8 +99,8 @@ export default function HomePage() {
           <strong>9-10 December 2k26</strong>
         </div>
         <div>
-          <span>TEAM</span>
-          <strong>6 students</strong>
+          <span>TEAM SIZE</span>
+          <strong>6</strong>
         </div>
       </div>
 
