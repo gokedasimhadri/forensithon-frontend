@@ -318,8 +318,8 @@ export default function AccountDashboardPage() {
                 {confirmedPaidRecords.map(({ registration: reg, payment: pay }, idx) => {
                   const participants = Array.isArray(reg.participants) ? reg.participants : [];
                   const teamLead = participants[0] || {};
-                  const displayRegId = (reg.registrationNumber || pay.registrationNumber || 'CONFIRMED').replace(/^FORENSIC2026-/, 'FORENSIC2k26-');
-                  const displayTeamId = (reg.teamId || reg.meta?.teamId || displayRegId).replace(/^FORENSIC2026-/, 'FORENSIC2k26-');
+                  const displayRegId = (reg.registrationNumber || pay.registrationNumber || 'CONFIRMED').replace(/^FORENSIC2K26-/i, 'FORENSIC2026-');
+                  const displayTeamId = (reg.teamId || reg.meta?.teamId || displayRegId).replace(/^FORENSIC2K26-/i, 'FORENSIC2026-');
                   const amountRupees =
                     pay.amount !== undefined && pay.amount !== null
                       ? pay.amount

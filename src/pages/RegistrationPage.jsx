@@ -1772,12 +1772,21 @@ export default function RegistrationPage() {
       const orderData = await createForensithonOrder(orderPayload);
 
       // 3. Configure and Open Razorpay Checkout Window
+      const activityNameDesc = String(
+        orderData.notes?.activityName ||
+        orderData.description ||
+        orderData.eventTitle ||
+        currentChallenge.title ||
+        currentChallenge.name ||
+        'FORENSITHON 2k26'
+      ).trim();
+
       const rzpOptions = {
         key: orderData.key || orderData.keyId,
         amount: orderData.amount, // in paise
         currency: orderData.currency || 'INR',
         name: 'FORENSITHON 2k26',
-        description: `Team Registration (${teamName.trim()}) - ${currentChallenge.id}`,
+        description: activityNameDesc,
         image: `${import.meta.env.BASE_URL}aditya-university-logo.jpg`,
         order_id: orderData.orderId,
         notes: orderData.notes || undefined,

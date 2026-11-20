@@ -40,9 +40,9 @@ export default function ParticipantPassModal({ member, registration, onClose }) 
   const branchAndDept = year ? `${department} • ${year}` : department;
 
   const rawTeamId = String(
-    registration?.teamId || registration?.meta?.teamId || registration?.registrationNumber || 'FORENSIC2k26'
+    registration?.teamId || registration?.meta?.teamId || registration?.registrationNumber || 'FORENSIC2026'
   ).trim().toUpperCase();
-  const teamId = rawTeamId.replace(/^FORENSIC2026-/, 'FORENSIC2k26-');
+  const teamId = rawTeamId.replace(/^FORENSIC2K26-/, 'FORENSIC2026-');
 
   const eventTitle = String(
     registration?.challengeTitle || registration?.eventTitle || 'FORENSITHON 2k26'
