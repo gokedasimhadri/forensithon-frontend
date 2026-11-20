@@ -318,8 +318,8 @@ export default function AccountDashboardPage() {
                 {confirmedPaidRecords.map(({ registration: reg, payment: pay }, idx) => {
                   const participants = Array.isArray(reg.participants) ? reg.participants : [];
                   const teamLead = participants[0] || {};
-                  const displayRegId = reg.registrationNumber || pay.registrationNumber || 'CONFIRMED';
-                  const displayTeamId = reg.teamId || reg.meta?.teamId || displayRegId;
+                  const displayRegId = (reg.registrationNumber || pay.registrationNumber || 'CONFIRMED').replace(/^FORENSIC2026-/, 'FORENSIC2k26-');
+                  const displayTeamId = (reg.teamId || reg.meta?.teamId || displayRegId).replace(/^FORENSIC2026-/, 'FORENSIC2k26-');
                   const amountRupees =
                     pay.amount !== undefined && pay.amount !== null
                       ? pay.amount
@@ -392,7 +392,7 @@ export default function AccountDashboardPage() {
                               <h3>{reg.challengeTitle || reg.eventTitle || 'Forensithon 2k26'}</h3>
                             </div>
                             <p className="receipt-domain-name">
-                              <strong>Domain / Track:</strong> {reg.domainTitle || reg.domainCode || reg.typeCode || 'FORENSITHON'} · <strong>Academic Year:</strong> {reg.academicYear || '2026-27'}
+                              <strong>Domain:</strong> {reg.domainTitle || reg.domainCode || reg.typeCode || 'FORENSITHON'} · <strong>Academic Year:</strong> {reg.academicYear || '2026-27'}
                             </p>
                           </div>
                         </div>
@@ -400,7 +400,7 @@ export default function AccountDashboardPage() {
                         <div className="receipt-divider" />
 
                         <div className="receipt-section">
-                          <span className="receipt-subheading">REGISTERED SQUAD ({participants.length} MEMBERS)</span>
+                          <span className="receipt-subheading">REGISTERED TEAM ({participants.length} MEMBERS)</span>
                           <div className="account-members-table-wrap">
                             <table className="account-members-table">
                               <thead>

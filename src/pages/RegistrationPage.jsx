@@ -1652,7 +1652,7 @@ export default function RegistrationPage() {
     }
 
     if (!selectedChallengeId || !currentChallenge) {
-      errors.challenge = 'Please select an active track and problem statement.';
+      errors.challenge = 'Please select an active domain and problem statement.';
     }
 
     // Validate 6 members (Team Leader + remaining 5 members) & block duplicate roll numbers
@@ -1678,7 +1678,7 @@ export default function RegistrationPage() {
 
     if (!allRemainingFiveFilled) {
       if (confirmedCount === 6 && !isSquadCompositionValid) {
-        errors.squadComposition = `Mandatory squad composition: Exactly 2 Forensic / CSDF, 2 Engineering, and 2 Open discipline members are required in any order. Current count: ${confirmedTierCounts.forensic}/2 Forensic, ${confirmedTierCounts.engineering}/2 Engineering, ${confirmedTierCounts.open}/2 Open.`;
+        errors.squadComposition = `Mandatory team composition: Exactly 2 Forensic / CSDF, 2 Engineering, and 2 Open discipline members are required in any order. Current count: ${confirmedTierCounts.forensic}/2 Forensic, ${confirmedTierCounts.engineering}/2 Engineering, ${confirmedTierCounts.open}/2 Open.`;
       } else {
         errors.remainingMembers = 'Please complete all 5 remaining team members before proceeding to payment.';
       }
@@ -1705,7 +1705,7 @@ export default function RegistrationPage() {
     if (!allRemainingFiveFilled) {
       if (confirmedCount === 6 && !isSquadCompositionValid) {
         setPaymentErrorMessage(
-          `Payment disabled: Squad composition must have exactly 2 Forensic, 2 Engineering, and 2 Open discipline members. (Current: ${confirmedTierCounts.forensic}/2 Forensic, ${confirmedTierCounts.engineering}/2 Engineering, ${confirmedTierCounts.open}/2 Open)`
+          `Payment disabled: Team composition must have exactly 2 Forensic, 2 Engineering, and 2 Open discipline members. (Current: ${confirmedTierCounts.forensic}/2 Forensic, ${confirmedTierCounts.engineering}/2 Engineering, ${confirmedTierCounts.open}/2 Open)`
         );
       } else {
         setPaymentErrorMessage('Payment is disabled until all 5 remaining team members are filled.');
@@ -2041,7 +2041,7 @@ export default function RegistrationPage() {
               <div className="receipt-divider" />
 
               <div className="receipt-section">
-                <span className="receipt-subheading">REGISTERED SQUAD (6 BUILDERS)</span>
+                <span className="receipt-subheading">REGISTERED TEAM (6 BUILDERS)</span>
                 <p className="receipt-branch-confirmation">
                   ✓ Verified: Exactly 6 Aditya University students (2 Forensic + 2 Engineering + 2 Open Discipline)
                 </p>
@@ -2302,14 +2302,14 @@ export default function RegistrationPage() {
                   <div>
                     <h2 className="form-section-title">Select Domain &amp; Problem Statement</h2>
                     <p className="form-section-desc">
-                      Choose a track and {catalog.challenges.length > 0 ? `one of the ${catalog.challenges.length} live problem statements` : 'a problem statement'} your team will solve.
+                      Choose a domain and {catalog.challenges.length > 0 ? `one of the ${catalog.challenges.length} live problem statements` : 'a problem statement'} your team will solve.
                     </p>
                   </div>
                 </div>
 
                 {catalogError && (
                   <div className="payment-error-alert" role="alert" style={{ marginBottom: '16px' }}>
-                    <span>Unable to load live tracks from Unified Portal: {catalogError}</span>
+                    <span>Unable to load live domains from Unified Portal: {catalogError}</span>
                   </div>
                 )}
 
@@ -2355,7 +2355,7 @@ export default function RegistrationPage() {
 
                   <div className="form-field-group">
                     <label htmlFor="domainSelect" className="form-label required">
-                      Forensic Track
+                      Forensic Domain
                     </label>
                     <select
                       id="domainSelect"
@@ -2365,13 +2365,13 @@ export default function RegistrationPage() {
                       onChange={(e) => handleDomainChange(e.target.value)}
                     >
                       {catalogLoading ? (
-                        <option value="">Loading tracks...</option>
+                        <option value="">Loading domains...</option>
                       ) : catalog.domains.length === 0 ? (
-                        <option value="">No tracks available</option>
+                        <option value="">No domains available</option>
                       ) : (
                         catalog.domains.map((d) => (
                           <option key={d._id || d.code} value={d.code}>
-                            Track {String(d.sortOrder || d.number).padStart(2, '0')} · {d.name} ({d.ids})
+                            Domain {String(d.sortOrder || d.number).padStart(2, '0')} · {d.name} ({d.ids})
                           </option>
                         ))
                       )}
@@ -2382,7 +2382,7 @@ export default function RegistrationPage() {
                 {/* Problem Statement Dropdown */}
                 <div className="form-field-group" style={{ marginTop: '16px' }}>
                   <label htmlFor="challengeSelect" className="form-label required">
-                    Problem Statement ({domainChallenges.length} available in {currentDomainInfo?.name || selectedDomain || 'Track'})
+                    Problem Statement ({domainChallenges.length} available in {currentDomainInfo?.name || selectedDomain || 'Domain'})
                   </label>
                   <select
                     id="challengeSelect"
@@ -2404,7 +2404,7 @@ export default function RegistrationPage() {
                     {catalogLoading ? (
                       <option value="">Loading problem statements...</option>
                     ) : domainChallenges.length === 0 ? (
-                      <option value="">No problem statements published in this track yet</option>
+                      <option value="">No problem statements published in this domain yet</option>
                     ) : (
                       domainChallenges.map((c) => {
                         const isPaid = Boolean(findPaidEventForChallenge(c, paidEvents));
@@ -2436,7 +2436,7 @@ export default function RegistrationPage() {
                     <p className="event-paid-lock-desc">
                       Registration access is disabled for this event because your payment status is already <strong>PAID</strong>
                       {paidRecordForCurrentChallenge.razorpayPaymentId ? ` (Payment ID: ${paidRecordForCurrentChallenge.razorpayPaymentId})` : ''}.
-                      To view your squad details or download your entry pass, open your Account Dashboard. To register for a different event, choose another problem statement above.
+                      To view your team details or download your entry pass, open your Account Dashboard. To register for a different event, choose another problem statement above.
                     </p>
                     <div className="event-paid-lock-actions">
                       <Link to="/account" className="button">
@@ -3196,7 +3196,7 @@ export default function RegistrationPage() {
                             </button>
                             <span className="add-member-hint">
                               {isLastMember
-                                ? 'Confirming will complete your 6-member squad.'
+                                ? 'Confirming will complete your 6-member team.'
                                 : `${5 - idx} more member${5 - idx !== 1 ? 's' : ''} to add after this.`}
                             </span>
                           </div>
@@ -3211,7 +3211,7 @@ export default function RegistrationPage() {
                           <circle cx="12" cy="12" r="10" />
                           <polyline points="20 6 9 17 4 12" />
                         </svg>
-                        All remaining 5 team members completed (6/6 squad). Scroll down to complete Razorpay payment.
+                        All remaining 5 team members completed (6/6 team). Scroll down to complete Razorpay payment.
                       </div>
                     )}
 
@@ -3284,7 +3284,7 @@ export default function RegistrationPage() {
                         <div className="payment-details-row">
                           <div>
                             <span className="pay-label">EVENT REGISTRATION</span>
-                            <h3 className="pay-title">FORENSITHON 2k26 · Six Builders Squad</h3>
+                            <h3 className="pay-title">FORENSITHON 2k26 · Six Builders Team</h3>
                             <p className="pay-desc">
                               One payment of ₹{effectiveFeeAmount} covers all 6 registered team members. Instant online verification.
                             </p>

@@ -39,9 +39,10 @@ export default function ParticipantPassModal({ member, registration, onClose }) 
   const year = String(member?.year || '').trim();
   const branchAndDept = year ? `${department} • ${year}` : department;
 
-  const teamId = String(
-    registration?.teamId || registration?.meta?.teamId || registration?.registrationNumber || 'FORENSIC2026'
+  const rawTeamId = String(
+    registration?.teamId || registration?.meta?.teamId || registration?.registrationNumber || 'FORENSIC2k26'
   ).trim().toUpperCase();
+  const teamId = rawTeamId.replace(/^FORENSIC2026-/, 'FORENSIC2k26-');
 
   const eventTitle = String(
     registration?.challengeTitle || registration?.eventTitle || 'FORENSITHON 2k26'

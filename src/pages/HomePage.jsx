@@ -109,14 +109,14 @@ export default function HomePage() {
           <div className="domains-heading-wrap">
             <p className="eyebrow">
               {loading
-                ? 'INVESTIGATIVE TRACKS · LIVE PROBLEM STATEMENTS'
-                : `${totalTracks} INVESTIGATIVE TRACK${totalTracks === 1 ? '' : 'S'} · ${totalChallenges} PROBLEM STATEMENT${totalChallenges === 1 ? '' : 'S'}`}
+                ? 'INVESTIGATIVE DOMAINS · LIVE PROBLEM STATEMENTS'
+                : `${totalTracks} INVESTIGATIVE DOMAIN${totalTracks === 1 ? '' : 'S'} · ${totalChallenges} PROBLEM STATEMENT${totalChallenges === 1 ? '' : 'S'}`}
             </p>
             <h2 className="domains-main-heading">
               <span className="heading-accent-dot" aria-hidden="true">■</span> Summary of Domains
             </h2>
             <p className="domains-main-desc">
-              Explore the specialized investigative domains of Forensithon 2k26 fetched live from Central Events. Every registered squad of six chooses one challenge statement.
+              Explore the specialized investigative domains of Forensithon 2k26 fetched live from Central Events. Every registered team of six chooses one challenge statement.
             </p>
           </div>
 
@@ -137,13 +137,13 @@ export default function HomePage() {
                   {loading ? (
                     <tr>
                       <td colSpan={5} style={{ textAlign: 'center', padding: '24px' }}>
-                        Loading investigative tracks...
+                        Loading investigative domains...
                       </td>
                     </tr>
                   ) : catalog.domains.length === 0 ? (
                     <tr>
                       <td colSpan={5} style={{ textAlign: 'center', padding: '24px' }}>
-                        No investigative tracks configured yet in Central Events.
+                        No investigative domains configured yet in Central Events.
                       </td>
                     </tr>
                   ) : (
@@ -218,7 +218,7 @@ export default function HomePage() {
             <div className="domains-cta-info">
               <h3>Ready to pick your challenge?</h3>
               <p>
-                Form your squad of 6 Aditya University students: 2 Forensic Science/CSDF, 2 Engineering, and 2 from any department.
+                Form your team of 6 Aditya University students: 2 Forensic Science/CSDF, 2 Engineering, and 2 from any department.
               </p>
             </div>
             <div className="domains-cta-links">
