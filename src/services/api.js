@@ -739,6 +739,34 @@ export async function fetchStudentDashboardData(rollNo, typeCode = EVENT_TYPE) {
 }
 
 /**
+ * Check if a Team Name is available or already used in Forensithon
+ */
+export async function checkForensithonTeamName({ teamName, leadRoll = '', challengeId = '', excludeRegId = '' } = {}) {
+  if (!teamName || !teamName.trim()) {
+    return { success: true, available: false, message: 'Team name is required.' };
+  }
+  const params = new URLSearchParams({ teamName: teamName.trim() });
+  if (leadRoll) params.append('leadRoll', String(leadRoll).trim());
+  if (challengeId) params.append('challengeId', String(challengeId).trim());
+  if (excludeRegId) params.append('excludeRegId', String(excludeRegId).trim());
+
+  try {
+    const res = await apiFetch(`/api/forensithon/check-team-name?${params.toString()}`);
+    const json = await res.json().catch(() => ({}));
+    if (res.ok && json.success) {
+      return json;
+    }
+    return {
+      success: false,
+      available: false,
+      message: json.error || json.message || 'This team name is already used. Please choose another unique team name.'
+    };
+  } catch {
+    return { success: true, available: true, message: 'Offline availability mode' };
+  }
+}
+
+/**
  * Check if any of the given roll numbers are already registered (CONFIRMED/PAID) for the same Forensithon event
  */
 export async function checkForensithonMembersEligibility(payload) {

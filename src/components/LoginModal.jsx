@@ -3,7 +3,8 @@ import { createPortal } from 'react-dom';
 import {
   loginTeamLeaderAccount,
   registerTeamLeaderAccount,
-  fetchStudentByRollNumber
+  fetchStudentByRollNumber,
+  checkForensithonTeamName
 } from '../services/api';
 
 const FORENSIC_BRANCH_OPTIONS = [
@@ -293,6 +294,21 @@ export default function LoginModal({ isOpen, onClose, initialMode = 'login', onS
   }, [isOpen, onClose]);
 
   // Roll number lookup for Registration tab with automatic Branch & Year population
+  const handleTeamNameBlur = async (name) => {
+    const clean = String(name || '').trim();
+    if (!clean) return;
+    try {
+      const res = await checkForensithonTeamName({ teamName: clean });
+      if (res && res.available === false) {
+        setAuthError(res.message || 'This team name is already used. Please choose another unique team name.');
+      } else if (authError && authError.includes('already used')) {
+        setAuthError('');
+      }
+    } catch {
+      // ignore
+    }
+  };
+
   const handleRegisterRollChange = (val) => {
     const rawUpper = val.toUpperCase();
     const cleanUpper = rawUpper.trim();
@@ -315,17 +331,6 @@ export default function LoginModal({ isOpen, onClose, initialMode = 'login', onS
       lookupTimerRef.current = setTimeout(async () => {
         try {
           const student = await fetchStudentByRollNumber(cleanUpper);
-          if (student && student.alreadyRegistered) {
-            setLookupStatus({
-              status: 'already_registered',
-              studentName: student.name || cleanUpper,
-              message: `Already registered in team "${student.teamName}"!`
-            });
-            setAuthError(
-              `Student (${cleanUpper}) is already registered in team "${student.teamName}". Please switch to the Login tab.`
-            );
-            return;
-          }
 
           if (student && !student.error && (student.studentname || student.studentName || student.name)) {
             const studentName = (student.studentname || student.studentName || student.name || '').trim();
@@ -628,7 +633,13 @@ export default function LoginModal({ isOpen, onClose, initialMode = 'login', onS
                       className="auth-modal-input"
                       placeholder="e.g. CyberSherlocks, ForensicForge"
                       value={registerForm.teamName}
-                      onChange={(e) => setRegisterForm((p) => ({ ...p, teamName: e.target.value }))}
+                      onChange={(e) => {
+                        setRegisterForm((p) => ({ ...p, teamName: e.target.value }));
+                        if (authError && authError.includes('already used')) {
+                          setAuthError('');
+                        }
+                      }}
+                      onBlur={(e) => handleTeamNameBlur(e.target.value)}
                       required
                     />
                   </div>

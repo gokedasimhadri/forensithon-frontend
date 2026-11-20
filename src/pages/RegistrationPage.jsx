@@ -14,7 +14,8 @@ import {
   saveTeamMembersDraft,
   createForensithonOrder,
   verifyForensithonPayment,
-  findPaidEventForChallenge
+  findPaidEventForChallenge,
+  checkForensithonTeamName
 } from '../services/api';
 
 const FORENSIC_BRANCH_OPTIONS = [
@@ -494,6 +495,7 @@ export default function RegistrationPage() {
   );
   const lookupTimeouts = useRef({});
   const lastFetchedRollRef = useRef({});
+  const teamNameCheckTimerRef = useRef(null);
   const initialSyncDoneRef = useRef(false);
   const paymentSectionRef = useRef(null);
   const unauthPromptFiredRef = useRef(false);
@@ -690,6 +692,19 @@ export default function RegistrationPage() {
         const regToLoad = draftMatchesQuery ? draft : null;
         const resolvedTeamName = String(regToLoad?.teamName || student?.teamName || '').trim();
         setTeamName(resolvedTeamName);
+        if (
+          resolvedTeamName &&
+          serverPaidEvents.some(
+            (pe) =>
+              (pe.teamName || pe.registration?.teamName || '').trim().toLowerCase() ===
+              resolvedTeamName.toLowerCase()
+          )
+        ) {
+          setValidationErrors((prev) => ({
+            ...prev,
+            teamName: 'This team name is already used. Please choose another unique team name.'
+          }));
+        }
         const { nextMembers, nextConfirmedCount } = buildMembersWithLeader(student, regToLoad);
         setMembers(nextMembers);
         setConfirmedCount(nextConfirmedCount);
@@ -715,6 +730,19 @@ export default function RegistrationPage() {
       const pay = state?.payment || null;
       const resolvedTeamName = String(reg?.teamName || student?.teamName || '').trim();
       setTeamName(resolvedTeamName);
+      if (
+        resolvedTeamName &&
+        serverPaidEvents.some(
+          (pe) =>
+            (pe.teamName || pe.registration?.teamName || '').trim().toLowerCase() ===
+            resolvedTeamName.toLowerCase()
+        )
+      ) {
+        setValidationErrors((prev) => ({
+          ...prev,
+          teamName: 'This team name is already used. Please choose another unique team name.'
+        }));
+      }
 
       const { nextMembers, nextConfirmedCount } = buildMembersWithLeader(student, reg);
       setMembers(nextMembers);
@@ -945,25 +973,6 @@ export default function RegistrationPage() {
 
     try {
       const student = await fetchStudentDetailsFromApi(cleanRoll);
-
-      if (student && student.alreadyRegistered) {
-        lastFetchedRollRef.current[index] = cleanRoll;
-        const studentName = (student.studentname || student.studentName || student.name || cleanRoll).trim();
-        setLookupStatuses((prev) => {
-          const copy = [...prev];
-          copy[index] = {
-            status: 'already_registered',
-            studentName,
-            message: `Already registered in team "${student.teamName}" for ${student.eventTitle}!`
-          };
-          return copy;
-        });
-        setValidationErrors((prev) => ({
-          ...prev,
-          [`member_${index}_rollNo`]: `Already Registered: ${studentName} (${cleanRoll}) is already registered in team "${student.teamName}" for "${student.eventTitle}". Registered students cannot register again.`
-        }));
-        return;
-      }
 
       if (student && !student.error && (student.studentname || student.studentName || student.name)) {
         lastFetchedRollRef.current[index] = cleanRoll;
@@ -1385,6 +1394,60 @@ export default function RegistrationPage() {
     setAuthLookupStatus({ status: 'idle', message: '', studentName: '' });
   };
 
+  // Check if a Team Name is available across Forensithon
+  const verifyTeamNameAvailability = useCallback(
+    async (rawName) => {
+      const clean = String(rawName || '').trim();
+      if (!clean) {
+        setValidationErrors((prev) => ({ ...prev, teamName: 'Team name is required.' }));
+        return false;
+      }
+
+      // Check if this team name was already used in this student's paid events
+      const isUsedInPaid = paidEvents.some(
+        (pe) =>
+          (pe.teamName || pe.registration?.teamName || '').trim().toLowerCase() === clean.toLowerCase()
+      );
+      if (isUsedInPaid) {
+        setValidationErrors((prev) => ({
+          ...prev,
+          teamName: 'This team name is already used. Please choose another unique team name.'
+        }));
+        return false;
+      }
+
+      try {
+        const leadRoll = loggedInLeader?.roll || loggedInLeader?.rollNo || '';
+        const challengeId = currentChallenge?.id || selectedChallengeId || '';
+        const res = await checkForensithonTeamName({
+          teamName: clean,
+          leadRoll,
+          challengeId
+        });
+
+        if (res && res.available === false) {
+          setValidationErrors((prev) => ({
+            ...prev,
+            teamName: res.message || 'This team name is already used. Please choose another unique team name.'
+          }));
+          return false;
+        } else {
+          setValidationErrors((prev) => {
+            const next = { ...prev };
+            if (next.teamName && next.teamName.includes('already used')) {
+              delete next.teamName;
+            }
+            return next;
+          });
+          return true;
+        }
+      } catch {
+        return true;
+      }
+    },
+    [paidEvents, loggedInLeader, currentChallenge, selectedChallengeId]
+  );
+
   // Persist Team Name + Team Leader + Remaining 5 Members to central_event_student_registrations
   const persistTeamDraft = async (nextMembersList = members, overrideTeamName = teamName) => {
     if (!loggedInLeader) return;
@@ -1397,6 +1460,19 @@ export default function RegistrationPage() {
     const cleanTeamName = (overrideTeamName || loggedInLeader.teamName || '').trim();
     if (!cleanTeamName) {
       setSaveError('Enter a Team Name in Step 01 before saving team members.');
+      return;
+    }
+
+    if (
+      paidEvents.some(
+        (pe) =>
+          (pe.teamName || pe.registration?.teamName || '').trim().toLowerCase() ===
+          cleanTeamName.toLowerCase()
+      )
+    ) {
+      const errMsg = 'This team name is already used. Please choose another unique team name.';
+      setSaveError(errMsg);
+      setValidationErrors((prev) => ({ ...prev, teamName: errMsg }));
       return;
     }
 
@@ -1563,6 +1639,16 @@ export default function RegistrationPage() {
 
     if (!teamName.trim()) {
       errors.teamName = 'Team name is required.';
+    } else if (
+      paidEvents.some(
+        (pe) =>
+          (pe.teamName || pe.registration?.teamName || '').trim().toLowerCase() ===
+          teamName.trim().toLowerCase()
+      )
+    ) {
+      errors.teamName = 'This team name is already used. Please choose another unique team name.';
+    } else if (validationErrors.teamName) {
+      errors.teamName = validationErrors.teamName;
     }
 
     if (!selectedChallengeId || !currentChallenge) {
@@ -1575,8 +1661,6 @@ export default function RegistrationPage() {
       const cleanRoll = String(m.rollNo || '').trim().toUpperCase();
       if (!cleanRoll) {
         errors[`member_${idx}_rollNo`] = `Roll number is required.`;
-      } else if (lookupStatuses[idx]?.status === 'already_registered') {
-        errors[`member_${idx}_rollNo`] = `Student (${m.rollNo}) is already registered in another team.`;
       }
       if (!m.name.trim()) {
         errors[`member_${idx}_name`] = `Student ${idx + 1} name is required.`;
@@ -2241,14 +2325,26 @@ export default function RegistrationPage() {
                       placeholder="e.g. CyberSherlocks, ForensicForge"
                       value={teamName}
                       onChange={(e) => {
-                        setTeamName(e.target.value);
-                        if (validationErrors.teamName) {
+                        const val = e.target.value;
+                        setTeamName(val);
+                        if (teamNameCheckTimerRef.current) clearTimeout(teamNameCheckTimerRef.current);
+                        if (!val.trim()) {
+                          setValidationErrors((prev) => ({ ...prev, teamName: 'Team name is required.' }));
+                        } else {
                           setValidationErrors((prev) => {
                             const copy = { ...prev };
-                            delete copy.teamName;
+                            if (copy.teamName && !copy.teamName.includes('already used')) {
+                              delete copy.teamName;
+                            }
                             return copy;
                           });
+                          teamNameCheckTimerRef.current = setTimeout(() => {
+                            verifyTeamNameAvailability(val);
+                          }, 350);
                         }
+                      }}
+                      onBlur={(e) => {
+                        verifyTeamNameAvailability(e.target.value);
                       }}
                       data-error-key="teamName"
                     />
@@ -2886,9 +2982,6 @@ export default function RegistrationPage() {
                       const handleAddMember = async () => {
                         const errors = {};
                         if (!m.rollNo.trim()) errors[`member_${idx}_rollNo`] = 'Roll number is required.';
-                        else if (lookupStatuses[idx]?.status === 'already_registered') {
-                          errors[`member_${idx}_rollNo`] = 'This student is already registered in a confirmed Forensithon team. Re-registration is not allowed.';
-                        }
                         if (!m.name.trim()) errors[`member_${idx}_name`] = 'Full name is required.';
                         if (!m.email.trim()) errors[`member_${idx}_email`] = 'Email address is required.';
                         else if (!m.email.includes('@')) errors[`member_${idx}_email`] = 'Enter a valid email address.';
