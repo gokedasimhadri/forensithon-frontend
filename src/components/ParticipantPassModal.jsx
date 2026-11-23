@@ -30,6 +30,7 @@ const spaceOutBarcodeLabel = (code = '') => {
 export default function ParticipantPassModal({ member, registration, onClose }) {
   const [photoFailed, setPhotoFailed] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [copiedBarcode, setCopiedBarcode] = useState(false);
 
   const rollNumber = String(member?.rollNumber || member?.rollNo || member?.roll || '').trim().toUpperCase();
   const memberName = String(member?.name || 'Participant').trim();
@@ -124,6 +125,38 @@ export default function ParticipantPassModal({ member, registration, onClose }) 
       document.body.style.overflow = prevOverflow;
     };
   }, [onClose]);
+
+  const handleCopyBarcode = async (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    const textToCopy = String(barcodeValue || '').trim();
+    if (!textToCopy) return;
+
+    let success = false;
+    if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
+      try {
+        await navigator.clipboard.writeText(textToCopy);
+        success = true;
+      } catch {}
+    }
+    if (!success && typeof document !== 'undefined') {
+      try {
+        const textarea = document.createElement('textarea');
+        textarea.value = textToCopy;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        success = document.execCommand('copy');
+        document.body.removeChild(textarea);
+      } catch {}
+    }
+
+    setCopiedBarcode(true);
+    setTimeout(() => setCopiedBarcode(false), 2000);
+  };
 
   const handleDownloadPassPdf = async () => {
     setDownloadingPdf(true);
@@ -424,7 +457,35 @@ export default function ParticipantPassModal({ member, registration, onClose }) 
                   </svg>
                   <span>ENTRY PASS</span>
                 </div>
-                <div className="fpass-footer-code">{spaceOutBarcodeLabel(barcodeValue)}</div>
+                <div className="fpass-footer-code-wrap">
+                  <span
+                    className="fpass-footer-code"
+                    onClick={handleCopyBarcode}
+                    title="Click to copy barcode"
+                  >
+                    {spaceOutBarcodeLabel(barcodeValue)}
+                  </span>
+                  <button
+                    type="button"
+                    className={`fpass-barcode-copy-btn ${copiedBarcode ? 'copied' : ''}`}
+                    onClick={handleCopyBarcode}
+                    title={copiedBarcode ? 'Barcode Copied!' : `Copy barcode (${barcodeValue})`}
+                    aria-label={`Copy barcode ${barcodeValue}`}
+                    data-html2canvas-ignore="true"
+                  >
+                    {copiedBarcode ? (
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                    ) : (
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                      </svg>
+                    )}
+                    {copiedBarcode && <span className="fpass-copy-tooltip">Copied!</span>}
+                  </button>
+                </div>
                 <div className="fpass-footer-right">NON-TRANSFERABLE • CARRY ID</div>
               </div>
             </div>

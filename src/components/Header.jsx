@@ -203,6 +203,14 @@ export default function Header({ motionOff, toggleMotion }) {
                         <strong>{loggedUser.teamName}</strong>
                       </div>
                     )}
+                    {(loggedUser.teamId || loggedUser.registrationNumber) && (
+                      <div className="dropdown-user-team" style={{ marginTop: '3px' }}>
+                        <span>Team ID: </span>
+                        <strong style={{ fontFamily: 'var(--font-mono, monospace)', letterSpacing: '0.5px', color: '#0b192c' }}>
+                          {loggedUser.teamId || loggedUser.registrationNumber}
+                        </strong>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -222,6 +230,20 @@ export default function Header({ motionOff, toggleMotion }) {
                       <line x1="3" y1="10" x2="21" y2="10" />
                     </svg>
                     <span>My Account &amp; Pass</span>
+                  </Link>
+
+                  <Link
+                    to="/change-password"
+                    className="dropdown-item"
+                    onClick={() => setIsMenuOpen(false)}
+                    role="menuitem"
+                  >
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                      <circle cx="12" cy="16" r="1" />
+                    </svg>
+                    <span>Change Password</span>
                   </Link>
 
                   <button

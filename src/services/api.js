@@ -853,4 +853,90 @@ export function findPaidEventForChallenge(challenge, paidEvents = []) {
   );
 }
 
+/**
+ * Forgot Password Flow APIs
+ */
+export async function lookupStudentForReset(roll) {
+  let res;
+  try {
+    res = await apiFetch('/api/event-students/forgot-password/check-roll', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ roll })
+    });
+    if (!res.ok && res.status === 404) {
+      res = await apiFetch('/api/event-students/forgot-password/lookup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ roll })
+      });
+    }
+  } catch {
+    res = await apiFetch('/api/event-students/forgot-password/lookup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ roll })
+    });
+  }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.success) {
+    throw new Error(data.error || 'Student account not found.');
+  }
+  return data;
+}
+
+export async function sendForgotPasswordOtp(roll, email) {
+  const res = await apiFetch('/api/event-students/forgot-password/send-otp', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ roll, email })
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.success) {
+    throw new Error(data.error || 'Failed to send OTP.');
+  }
+  return data;
+}
+
+export async function verifyForgotPasswordOtp(roll, otp) {
+  const res = await apiFetch('/api/event-students/forgot-password/verify-otp', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ roll, otp })
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.success) {
+    throw new Error(data.error || 'Failed to verify OTP.');
+  }
+  return data;
+}
+
+export async function resetForgotPassword(roll, otp, newPassword, confirmPassword) {
+  const res = await apiFetch('/api/event-students/forgot-password/reset', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ roll, otp, newPassword, confirmPassword })
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.success) {
+    throw new Error(data.error || 'Failed to reset password.');
+  }
+  return data;
+}
+
+export async function changeStudentPassword(payload) {
+  const res = await apiFetch('/api/event-students/change-password', {
+    method: 'POST',
+    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || (!data.success && data.error)) {
+    throw new Error(data.error || 'Failed to change password.');
+  }
+  return data;
+}
+
+
+
 

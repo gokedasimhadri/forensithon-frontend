@@ -8,6 +8,8 @@ import ChallengesPage from './pages/ChallengesPage';
 import RoundsPage from './pages/RoundsPage';
 import RegistrationPage from './pages/RegistrationPage';
 import AccountDashboardPage from './pages/AccountDashboardPage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import ChangePasswordPage from './pages/ChangePasswordPage';
 import NotFoundPage from './pages/NotFoundPage';
 import { useMotion } from './hooks/useMotion';
 import { useScrollReveal } from './hooks/useScrollReveal';
@@ -37,6 +39,10 @@ export default function App() {
         <Route path="/registration" element={<RegistrationPage />} />
         <Route path="/registration.html" element={<Navigate to="/registration" replace />} />
         <Route path="/login" element={<Navigate to="/registration?auth=login" replace />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/forgot-password.html" element={<Navigate to="/forgot-password" replace />} />
+        <Route path="/change-password" element={<ChangePasswordPage />} />
+        <Route path="/change-password.html" element={<Navigate to="/change-password" replace />} />
         <Route path="/account" element={<AccountDashboardPage />} />
         <Route path="/dashboard" element={<AccountDashboardPage />} />
         <Route path="*" element={<NotFoundPage />} />
