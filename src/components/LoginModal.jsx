@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   loginTeamLeaderAccount,
   registerTeamLeaderAccount,
@@ -592,6 +593,15 @@ export default function LoginModal({ isOpen, onClose, initialMode = 'login', onS
                       >
                         {showPassword ? 'HIDE' : 'SHOW'}
                       </button>
+                    </div>
+                    <div style={{ marginTop: '8px', textAlign: 'right' }}>
+                      <Link
+                        to={loginForm.identifier ? `/forgot-password?roll=${encodeURIComponent(loginForm.identifier.trim())}` : '/forgot-password'}
+                        onClick={() => onClose && onClose()}
+                        style={{ fontSize: '12px', color: '#ff6500', fontWeight: '600', textDecoration: 'none' }}
+                      >
+                        Forgot Password?
+                      </Link>
                     </div>
                   </div>
                 </div>
