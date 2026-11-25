@@ -666,19 +666,27 @@ export async function refreshLoggedInStudent() {
  */
 export async function registerTeamLeaderAccount(payload) {
   clearStoredTeamLeader();
+  const eventType = payload.typeCode || EVENT_TYPE || 'FORENSITHON';
   const res = await apiFetch('/api/event-students/register', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Event-Type': eventType
+    },
     body: JSON.stringify({
       ...payload,
       roll: String(payload.roll || '').trim().toUpperCase(),
       role: 'Team Leader',
-      isTeamLeader: true
+      isTeamLeader: true,
+      typeCode: eventType
     })
   });
   const json = await res.json().catch(() => ({}));
   if (!res.ok || !json.success) {
-    throw new Error(json.error || json.message || 'Unable to register Team Leader account.');
+    const err = new Error(json.error || json.message || 'Unable to register Team Leader account.');
+    err.code = json.code;
+    err.existingTypeCode = json.existingTypeCode;
+    throw err;
   }
   return json.student || json.data;
 }

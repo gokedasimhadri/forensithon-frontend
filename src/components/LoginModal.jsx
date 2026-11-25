@@ -462,7 +462,12 @@ export default function LoginModal({ isOpen, onClose, initialMode = 'login', onS
       setLookupStatus({ status: 'idle', studentName: '', message: '' });
       setAuthMode('login');
     } catch (err) {
-      setAuthError(err.message || 'Unable to register Team Leader account.');
+      if (err.code === 'ALREADY_REGISTERED' || err.code === 'ALREADY_REGISTERED_ANOTHER_EVENT' || /already\s*registered|previous\s*event/i.test(err.message)) {
+        setAuthError(err.message || 'You already registered in previous events, So you can login directly with previous credentials');
+        setLoginForm((prev) => ({ ...prev, identifier: rNo, password: '' }));
+      } else {
+        setAuthError(err.message || 'Unable to register Team Leader account.');
+      }
     } finally {
       setAuthLoading(false);
     }
