@@ -410,7 +410,7 @@ export default function AccountDashboardPage() {
                       ? reg.passesEnabled
                       : (dashboardData?.passesEnabled !== undefined
                           ? dashboardData.passesEnabled
-                          : (typeConfig ? (typeConfig.isActive && typeConfig.passesRequired) : true))
+                          : (typeConfig ? (typeConfig.isActive && typeConfig.passesRequired) : false))
                   );
 
                   return (
