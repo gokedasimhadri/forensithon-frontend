@@ -8056,6 +8056,17 @@ select.auth-modal-input:focus,
   box-shadow: 0 0 0 3px rgba(255, 85, 0, 0.12) !important;
 }
 
+select.auth-modal-input:disabled,
+.auth-modal-select:disabled,
+.auth-modal-input:disabled,
+.form-select:disabled {
+  background-color: #f1f5f9 !important;
+  color: #475569 !important;
+  border-color: #cbd5e1 !important;
+  cursor: not-allowed !important;
+  opacity: 0.85 !important;
+}
+
 .auth-modal-input:focus {
   border-color: var(--orange, #ff5500) !important;
   background: #ffffff !important;
@@ -8137,6 +8148,41 @@ select.auth-modal-input:focus,
   margin-top: 4px !important;
   color: #0284c7 !important;
   font-weight: 600 !important;
+}
+
+.auth-modal-pw-hint {
+  display: flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  font-family: var(--font-body, sans-serif) !important;
+  font-size: 11px !important;
+  color: #64748b !important;
+  margin-top: 5px !important;
+  line-height: 1.35 !important;
+  transition: color 0.15s ease !important;
+}
+
+.auth-modal-pw-hint.hint-invalid {
+  color: #dc2626 !important;
+  font-weight: 600 !important;
+}
+
+.auth-modal-pw-hint.hint-valid {
+  color: #16a34a !important;
+  font-weight: 600 !important;
+}
+
+.auth-hint-symbol {
+  font-weight: 800 !important;
+  font-size: 12px !important;
+}
+
+.auth-modal-input.is-live-valid {
+  border-color: #16a34a !important;
+}
+
+.auth-modal-input.has-pw-error {
+  border-color: #dc2626 !important;
 }
 
 @media (max-width: 640px) {

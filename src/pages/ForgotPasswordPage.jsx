@@ -6,6 +6,7 @@ import {
   verifyForgotPasswordOtp,
   resetForgotPassword
 } from '../services/api';
+import { validatePassword } from '../components/LoginModal';
 
 export default function ForgotPasswordPage() {
   const [searchParams] = useSearchParams();
@@ -192,8 +193,9 @@ export default function ForgotPasswordPage() {
     setErrorMsg('');
     setSuccessMsg('');
 
-    if (!newPassword || newPassword.length < 4) {
-      setErrorMsg('New password must be at least 4 characters long.');
+    const pwError = validatePassword(newPassword);
+    if (pwError) {
+      setErrorMsg(pwError);
       return;
     }
 
@@ -444,7 +446,7 @@ export default function ForgotPasswordPage() {
                     id="newPassword"
                     type={showNewPw ? 'text' : 'password'}
                     className="forgot-input"
-                    placeholder="Min. 4 characters"
+                    placeholder="Min. 8 characters"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     required
@@ -457,6 +459,9 @@ export default function ForgotPasswordPage() {
                     {showNewPw ? 'HIDE' : 'SHOW'}
                   </button>
                 </div>
+                <p className="forgot-hint">
+                  Min 8 chars, 1 capital (A-Z), 1 number (0-9), & allowed special chars (@, _, $, #, !)
+                </p>
               </div>
 
               <div className="forgot-field">

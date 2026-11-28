@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { changeStudentPassword, getStoredTeamLeader, getStoredAuthToken } from '../services/api';
+import { validatePassword } from '../components/LoginModal';
 
 export default function ChangePasswordPage() {
   const navigate = useNavigate();
@@ -34,8 +35,9 @@ export default function ChangePasswordPage() {
       return;
     }
 
-    if (newPassword.length < 4) {
-      setErrorMsg('New password must be at least 4 characters.');
+    const pwError = validatePassword(newPassword);
+    if (pwError) {
+      setErrorMsg(pwError);
       return;
     }
 
@@ -203,7 +205,7 @@ export default function ChangePasswordPage() {
                     id="changeNewPassword"
                     type={showNewPw ? 'text' : 'password'}
                     className="forgot-input"
-                    placeholder="Min. 4 characters"
+                    placeholder="Min. 8 characters"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     autoComplete="new-password"
@@ -218,7 +220,7 @@ export default function ChangePasswordPage() {
                   </button>
                 </div>
                 <p className="forgot-hint">
-                  Must be at least 4 characters long and different from your old password.
+                  Min 8 chars, 1 capital (A-Z), 1 number (0-9), & allowed special chars (@, _, $, #, !)
                 </p>
               </div>
 

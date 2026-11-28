@@ -221,6 +221,39 @@ const createInitialRegisterForm = () => ({
   password: ''
 });
 
+// Format friendly event name for error messages
+const formatEventName = (code) => {
+  if (!code) return 'another';
+  const clean = String(code).trim().toUpperCase();
+  if (clean === 'COLORS') return 'Colors';
+  if (clean === 'VEDA') return 'Veda';
+  if (clean === 'FORENSITHON') return 'Forensithon';
+  return clean.charAt(0).toUpperCase() + clean.slice(1).toLowerCase();
+};
+
+// Validate password against festival portal security policy
+export const validatePassword = (pwd) => {
+  if (!pwd || !pwd.trim()) {
+    return 'Password is required';
+  }
+  if (pwd.length < 8) {
+    return 'Password must be at least 8 characters long';
+  }
+  if (!/[A-Z]/.test(pwd)) {
+    return 'Password must contain at least one capital letter (A-Z)';
+  }
+  if (!/[0-9]/.test(pwd)) {
+    return 'Password must contain at least one number (0-9)';
+  }
+  if (!/[@_$#!]/.test(pwd)) {
+    return 'Password must contain at least one special character (@, _, $, #, !)';
+  }
+  if (!/^[A-Za-z0-9@_$#!]+$/.test(pwd)) {
+    return 'Only special characters @, _, $, #, ! are allowed';
+  }
+  return null;
+};
+
 export default function LoginModal({ isOpen, onClose, initialMode = 'login', onSuccess }) {
   const [authMode, setAuthMode] = useState(initialMode || 'login'); // 'login' | 'register'
   const [showPassword, setShowPassword] = useState(false);
@@ -236,6 +269,10 @@ export default function LoginModal({ isOpen, onClose, initialMode = 'login', onS
 
   // Register form state
   const [registerForm, setRegisterForm] = useState(createInitialRegisterForm);
+
+  // Live password validation state for registration
+  const isPwTyped = Boolean(registerForm.password);
+  const isPwValid = isPwTyped && !validatePassword(registerForm.password);
 
   const [lookupStatus, setLookupStatus] = useState({ status: 'idle', studentName: '', message: '' });
   const lookupTimerRef = useRef(null);
@@ -439,7 +476,8 @@ export default function LoginModal({ isOpen, onClose, initialMode = 'login', onS
     if (!mobileVal || mobileVal.length < 10) return setAuthError('10-digit mobile number is required.');
     if (!branchVal) return setAuthError('Branch / Department is required.');
     if (!yearVal) return setAuthError('Year of Study is required.');
-    if (!passwordVal || passwordVal.length < 4) return setAuthError('Password must be at least 4 characters.');
+    const pwError = validatePassword(passwordVal);
+    if (pwError) return setAuthError(pwError);
 
     setAuthLoading(true);
     try {
@@ -463,7 +501,11 @@ export default function LoginModal({ isOpen, onClose, initialMode = 'login', onS
       setAuthMode('login');
     } catch (err) {
       if (err.code === 'ALREADY_REGISTERED' || err.code === 'ALREADY_REGISTERED_ANOTHER_EVENT' || /already\s*registered|previous\s*event/i.test(err.message)) {
-        setAuthError(err.message || 'You already registered in previous events, So you can login directly with previous credentials');
+        const evName = formatEventName(err.existingTypeCode);
+        const fallbackMsg = err.existingTypeCode
+          ? `You already registered in ${evName} event, So you can login directly with previous credentials`
+          : (err.message || 'You already registered in another event, So you can login directly with previous credentials');
+        setAuthError(err.message || fallbackMsg);
         setLoginForm((prev) => ({ ...prev, identifier: rNo, password: '' }));
       } else {
         setAuthError(err.message || 'Unable to register Team Leader account.');
@@ -734,6 +776,17 @@ export default function LoginModal({ isOpen, onClose, initialMode = 'login', onS
                       className="auth-modal-input auth-modal-select"
                       value={registerForm.branch}
                       onChange={(e) => setRegisterForm((p) => ({ ...p, branch: e.target.value }))}
+                      disabled={Boolean(registerForm.rollNo && registerForm.rollNo.trim())}
+                      style={
+                        registerForm.rollNo && registerForm.rollNo.trim()
+                          ? { cursor: 'not-allowed', background: '#f1f5f9', opacity: 0.85, color: '#334155' }
+                          : {}
+                      }
+                      title={
+                        registerForm.rollNo && registerForm.rollNo.trim()
+                          ? 'Branch / Department is auto-populated from official university records and cannot be modified'
+                          : ''
+                      }
                       required
                     >
                       <optgroup label="Forensic Science & CSDF (Tier 1)">
@@ -812,8 +865,10 @@ export default function LoginModal({ isOpen, onClose, initialMode = 'login', onS
                       <input
                         id="modalPassword"
                         type={showPassword ? 'text' : 'password'}
-                        className="auth-modal-input auth-modal-input--pw"
-                        placeholder="Min. 4 characters"
+                        className={`auth-modal-input auth-modal-input--pw ${
+                          isPwTyped ? (isPwValid ? 'is-live-valid' : 'has-pw-error') : ''
+                        }`}
+                        placeholder="Min. 8 characters"
                         value={registerForm.password}
                         onChange={(e) => setRegisterForm((p) => ({ ...p, password: e.target.value }))}
                         required
@@ -826,6 +881,10 @@ export default function LoginModal({ isOpen, onClose, initialMode = 'login', onS
                         {showPassword ? 'HIDE' : 'SHOW'}
                       </button>
                     </div>
+                    <span className={`auth-modal-pw-hint ${isPwTyped ? (isPwValid ? 'hint-valid' : 'hint-invalid') : ''}`}>
+                      {isPwTyped && <span className="auth-hint-symbol">{isPwValid ? '✓' : '✕'}</span>}{' '}
+                      Min 8 chars, 1 capital (A-Z), 1 number (0-9), & allowed special chars (@, _, $, #, !)
+                    </span>
                   </div>
                 </div>
 

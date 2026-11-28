@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
+import { validatePassword } from '../components/LoginModal';
 import {
   fetchForensithonCatalog,
   fetchStudentByRollNumber,
@@ -1275,7 +1276,8 @@ export default function RegistrationPage() {
     if (!fullName) return setAuthError('Team Leader Full Name is required.');
     if (!emailVal || !emailVal.includes('@')) return setAuthError('Please enter a valid Email ID.');
     if (!mobileVal) return setAuthError('Mobile number is required for the Team Leader.');
-    if (!passwordVal || passwordVal.length < 4) return setAuthError('Please create a password (at least 4 characters).');
+    const pwError = validatePassword(passwordVal);
+    if (pwError) return setAuthError(pwError);
     if (authLookupStatus?.status === 'already_registered') {
       return setAuthError(
         `Student (${rNo}) is already registered in a confirmed team. Re-registration is not allowed. Please switch to the Login tab.`
@@ -2775,6 +2777,17 @@ export default function RegistrationPage() {
                                       className="form-select"
                                       value={m.branch}
                                       onChange={(e) => handleMemberChange(idx, 'branch', e.target.value)}
+                                      disabled={Boolean(m.rollNo && m.rollNo.trim())}
+                                      style={
+                                        m.rollNo && m.rollNo.trim()
+                                          ? { cursor: 'not-allowed', background: '#f1f5f9', opacity: 0.85, color: '#334155' }
+                                          : {}
+                                      }
+                                      title={
+                                        m.rollNo && m.rollNo.trim()
+                                          ? 'Branch / Department is auto-populated from official university records and cannot be modified'
+                                          : ''
+                                      }
                                     >
                                       <optgroup label="Forensic Science & CSDF (Tier 1)">
                                         {FORENSIC_BRANCH_OPTIONS.map((opt) => (
@@ -3126,6 +3139,17 @@ export default function RegistrationPage() {
                                 className="form-select"
                                 value={m.branch}
                                 onChange={(e) => handleMemberChange(idx, 'branch', e.target.value)}
+                                disabled={Boolean(m.rollNo && m.rollNo.trim())}
+                                style={
+                                  m.rollNo && m.rollNo.trim()
+                                    ? { cursor: 'not-allowed', background: '#f1f5f9', opacity: 0.85, color: '#334155' }
+                                    : {}
+                                }
+                                title={
+                                  m.rollNo && m.rollNo.trim()
+                                    ? 'Branch / Department is auto-populated from official university records and cannot be modified'
+                                    : ''
+                                }
                               >
                                 <optgroup label="Forensic Science & CSDF (Tier 1)">
                                   {FORENSIC_BRANCH_OPTIONS.map((opt) => (
