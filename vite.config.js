@@ -4,7 +4,7 @@ import { defineConfig, loadEnv } from 'vite'
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
-  const target = env.VITE_BACKEND_URL || env.VITE_API_URL
+  const target = env.BACKEND_URL || env.API_URL
 
   return {
     plugins: [react()],
@@ -13,8 +13,11 @@ export default defineConfig(({ mode }) => {
     base: '/forensithon/',
 
     define: {
-      'import.meta.env.VITE_API_URL': JSON.stringify(target),
-      'process.env.VITE_API_URL': JSON.stringify(target)
+      'import.meta.env.API_URL': JSON.stringify(target),
+      'process.env.API_URL': JSON.stringify(target),
+      'import.meta.env.EVENT_TYPE': JSON.stringify(env.EVENT_TYPE || env.VITE_EVENT_TYPE || 'FORENSITHON'),
+      'import.meta.env.VITE_EVENT_TYPE': JSON.stringify(env.EVENT_TYPE || env.VITE_EVENT_TYPE || 'FORENSITHON'),
+      'process.env.EVENT_TYPE': JSON.stringify(env.EVENT_TYPE || env.VITE_EVENT_TYPE || 'FORENSITHON')
     },
 
     server: {

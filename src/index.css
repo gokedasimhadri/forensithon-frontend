@@ -6992,6 +6992,29 @@ main {
   white-space: nowrap;
 }
 
+.attendance-manual-notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 10px 14px;
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  font-size: 12.5px;
+  color: #475569;
+  line-height: 1.45;
+}
+
+.attendance-manual-notice strong {
+  color: #0f172a;
+}
+
+.attendance-notice-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
 .account-members-table th.col-pass,
 .account-members-table td.cell-pass {
   text-align: center;

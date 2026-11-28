@@ -731,9 +731,9 @@ export default function ChallengesPage({ motionOff }) {
                             <Link
                               to="/account"
                               className="feed-footer-link feed-footer-link--paid"
-                              title="View your confirmed registration and entry pass in Account"
+                              title="View your confirmed registration in Account"
                             >
-                              Already Paid ({paidRecord.teamId || paidRecord.registrationNumber}) · View Pass ↗
+                              Already Paid ({paidRecord.teamId || paidRecord.registrationNumber}) · View Details ↗
                             </Link>
                           ) : (
                             <button

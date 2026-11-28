@@ -2,17 +2,18 @@
 // Connects dynamically to unified-backend for Central Events (types, categories, events) & student lookup
 
 export const EVENT_TYPE = (
-  (typeof import.meta !== 'undefined' && (import.meta.env?.VITE_EVENT_TYPE || import.meta.env?.EVENT_TYPE)) ||
+  (typeof import.meta !== 'undefined' && (import.meta.env?.EVENT_TYPE || import.meta.env?.VITE_EVENT_TYPE)) ||
+  (typeof process !== 'undefined' && (process.env?.EVENT_TYPE || process.env?.VITE_EVENT_TYPE)) ||
   'FORENSITHON'
 ).trim().toUpperCase();
 
 export const API_BASE = (
-  (typeof import.meta !== 'undefined' && (import.meta.env?.VITE_BACKEND_URL || import.meta.env?.VITE_API_URL)) ||
+  (typeof import.meta !== 'undefined' && (import.meta.env?.BACKEND_URL || import.meta.env?.API_URL)) ||
   'http://localhost:9022'
 ).replace(/\/+$/, '');
 
 export const ECAP_API_KEY =
-  (typeof import.meta !== 'undefined' && import.meta.env?.VITE_ECAP_API_KEY) ||
+  (typeof import.meta !== 'undefined' && import.meta.env?.ECAP_API_KEY) ||
   '4T4K65HWxqKD90AEZoCZLqA+m3nq6JvwDRDHIJUBFc4=';
 
 export function buildApiUrl(path = '') {
@@ -436,13 +437,13 @@ export async function fetchForensithonCatalog(typeCode = EVENT_TYPE) {
     // Also include active Subcategories (with description & subFields) defined on this Category
     const rawSubcategories = Array.isArray(cat.subcategories)
       ? [...cat.subcategories]
-          .filter((s) => s && s.isActive !== false)
-          .sort((a, b) => {
-            const sa = Number(a.sortOrder ?? 999);
-            const sb = Number(b.sortOrder ?? 999);
-            if (sa !== sb) return sa - sb;
-            return String(a.code || a.name || '').localeCompare(String(b.code || b.name || ''), undefined, { numeric: true });
-          })
+        .filter((s) => s && s.isActive !== false)
+        .sort((a, b) => {
+          const sa = Number(a.sortOrder ?? 999);
+          const sb = Number(b.sortOrder ?? 999);
+          if (sa !== sb) return sa - sb;
+          return String(a.code || a.name || '').localeCompare(String(b.code || b.name || ''), undefined, { numeric: true });
+        })
       : [];
 
     const existingTitleOrIdSet = new Set(
@@ -460,11 +461,11 @@ export async function fetchForensithonCatalog(typeCode = EVENT_TYPE) {
         // Avoid duplicate if same challenge is already published in central_events without extra subFields
         const normSubFields = Array.isArray(sub.subFields)
           ? sub.subFields
-              .map((sf) => ({
-                label: String(sf?.label || '').trim(),
-                value: String(sf?.value || '').trim()
-              }))
-              .filter((sf) => sf.label || sf.value)
+            .map((sf) => ({
+              label: String(sf?.label || '').trim(),
+              value: String(sf?.value || '').trim()
+            }))
+            .filter((sf) => sf.label || sf.value)
           : [];
 
         const descParsed = parseChallengeDescription(sub.description || '');

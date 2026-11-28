@@ -1,13 +1,19 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import ParticipantPassModal from '../components/ParticipantPassModal';
 import {
+  EVENT_TYPE,
   getStoredTeamLeader,
   clearStoredTeamLeader,
   refreshLoggedInStudent,
   loginTeamLeaderAccount,
   fetchStudentDashboardData
 } from '../services/api';
+
+const CURRENT_EVENT_TYPE = (
+  EVENT_TYPE ||
+  (typeof import.meta !== 'undefined' && (import.meta.env?.EVENT_TYPE || import.meta.env?.VITE_EVENT_TYPE)) ||
+  'FORENSITHON'
+).trim().toUpperCase();
 
 const formatDateTime = (val) => {
   if (!val) return '—';
@@ -37,14 +43,13 @@ export default function AccountDashboardPage() {
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState('');
   const [generatingPdfIdx, setGeneratingPdfIdx] = useState(null);
-  const [activePass, setActivePass] = useState(null);
 
   const loadDashboard = useCallback(async (rollNo) => {
     if (!rollNo) return;
     setLoading(true);
     setError('');
     try {
-      const data = await fetchStudentDashboardData(rollNo, 'FORENSITHON');
+      const data = await fetchStudentDashboardData(rollNo, CURRENT_EVENT_TYPE);
       setDashboardData(data);
       if (data?.student) {
         setStudent(data.student);
@@ -169,15 +174,69 @@ export default function AccountDashboardPage() {
     }
   };
 
-  // Strictly filter for status = CONFIRMED in central_event_student_registrations
-  // AND status = PAID in central_event_student_payments
+  // Strictly filter for:
+  // 1. status = CONFIRMED in central_event_student_registrations
+  // 2. status = PAID in central_event_student_payments
+  // 3. Database collection typeCode matching CURRENT_EVENT_TYPE from .env (e.g. FORENSITHON)
   const confirmedPaidRecords = (dashboardData?.confirmedPaidRecords || []).filter((item) => {
-    const regStatus = String(item?.registration?.status || '').trim().toUpperCase();
-    const payStatus = String(item?.payment?.status || '').trim().toUpperCase();
-    return regStatus === 'CONFIRMED' && payStatus === 'PAID';
+    const reg = item?.registration || {};
+    const pay = item?.payment || {};
+
+    const regStatus = String(reg.status || '').trim().toUpperCase();
+    const payStatus = String(pay.status || '').trim().toUpperCase();
+    if (regStatus !== 'CONFIRMED' || payStatus !== 'PAID') {
+      return false;
+    }
+
+    // Direct database collection typeCode matching against .env EVENT_TYPE
+    const regTypeCode = String(reg.typeCode || reg.eventType || reg.type || '').trim().toUpperCase();
+    const payTypeCode = String(pay.typeCode || pay.eventType || pay.type || '').trim().toUpperCase();
+
+    if (regTypeCode) {
+      return regTypeCode === CURRENT_EVENT_TYPE;
+    }
+    if (payTypeCode) {
+      return payTypeCode === CURRENT_EVENT_TYPE;
+    }
+
+    // Secondary fallback validation if typeCode field is not populated at the top level:
+    const regId = String(reg.registrationNumber || reg.teamId || '').toUpperCase();
+    const payRef = String(pay.paymentReference || '').toUpperCase();
+
+    // Exclude other festivals explicitly (e.g. COLORS, VEDA, ALA, CLUB, etc.)
+    if (
+      regId.includes('CLR') ||
+      regId.includes('COLORS') ||
+      payRef.includes('CLR') ||
+      payRef.includes('COLORS') ||
+      regId.includes('VEDA') ||
+      payRef.includes('VEDA')
+    ) {
+      return false;
+    }
+
+    return (
+      regId.includes(CURRENT_EVENT_TYPE) ||
+      payRef.includes(CURRENT_EVENT_TYPE) ||
+      regId.startsWith('FORENSIC')
+    );
   });
 
-  const pendingDrafts = dashboardData?.pendingDrafts || [];
+  const pendingDrafts = (dashboardData?.pendingDrafts || []).filter((draft) => {
+    const draftTypeCode = String(draft?.typeCode || draft?.eventType || draft?.type || '').trim().toUpperCase();
+    if (draftTypeCode) {
+      return draftTypeCode === CURRENT_EVENT_TYPE;
+    }
+    const draftRegNo = String(draft?.registrationNumber || draft?.teamId || '').toUpperCase();
+    if (
+      draftRegNo.includes('CLR') ||
+      draftRegNo.includes('COLORS') ||
+      draftRegNo.includes('VEDA')
+    ) {
+      return false;
+    }
+    return true;
+  });
   const profile = dashboardData?.student || student;
 
   return (
@@ -412,7 +471,6 @@ export default function AccountDashboardPage() {
                                   <th scope="col" className="col-dept">Department / Year</th>
                                   <th scope="col" className="col-email">Email</th>
                                   <th scope="col" className="col-mobile">Mobile</th>
-                                  <th scope="col" className="col-pass">Pass</th>
                                 </tr>
                               </thead>
                               <tbody>
@@ -438,27 +496,17 @@ export default function AccountDashboardPage() {
                                       </td>
                                       <td className="cell-email">{m.email || '—'}</td>
                                       <td className="cell-mobile">{m.phone || m.mobile || '—'}</td>
-                                      <td className="cell-pass">
-                                        <button
-                                          type="button"
-                                          className="table-view-pass-btn"
-                                          onClick={() => setActivePass({ member: m, registration: reg })}
-                                        >
-                                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                                            <rect x="2" y="5" width="20" height="14" rx="2" />
-                                            <line x1="7" y1="9" x2="7" y2="15" />
-                                            <line x1="11" y1="9" x2="11" y2="15" />
-                                            <line x1="15" y1="9" x2="15" y2="15" />
-                                            <line x1="18" y1="9" x2="18" y2="15" />
-                                          </svg>
-                                          View Pass
-                                        </button>
-                                      </td>
                                     </tr>
                                   );
                                 })}
                               </tbody>
                             </table>
+                          </div>
+                          <div className="attendance-manual-notice">
+                            <span className="attendance-notice-icon">📋</span>
+                            <div>
+                              <strong>Manual Attendance:</strong> Passes are not issued for Forensithon 2k26. Attendance will be recorded manually at the venue desk with your Roll Number &amp; College ID Card.
+                            </div>
                           </div>
                         </div>
 
@@ -546,14 +594,6 @@ export default function AccountDashboardPage() {
           </div>
         )}
       </section>
-
-      {activePass && (
-        <ParticipantPassModal
-          member={activePass.member}
-          registration={activePass.registration}
-          onClose={() => setActivePass(null)}
-        />
-      )}
     </main>
   );
 }
