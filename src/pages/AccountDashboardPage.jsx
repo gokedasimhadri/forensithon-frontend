@@ -6,8 +6,10 @@ import {
   clearStoredTeamLeader,
   refreshLoggedInStudent,
   loginTeamLeaderAccount,
-  fetchStudentDashboardData
+  fetchStudentDashboardData,
+  fetchEventTypeConfig
 } from '../services/api';
+import ParticipantPassModal from '../components/ParticipantPassModal';
 
 const CURRENT_EVENT_TYPE = (
   EVENT_TYPE ||
@@ -43,6 +45,19 @@ export default function AccountDashboardPage() {
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState('');
   const [generatingPdfIdx, setGeneratingPdfIdx] = useState(null);
+  const [selectedPass, setSelectedPass] = useState(null);
+  const [typeConfig, setTypeConfig] = useState(null);
+
+  // Fetch CentralEventType configuration for operational feature access (passesRequired, isActive)
+  useEffect(() => {
+    let active = true;
+    fetchEventTypeConfig(CURRENT_EVENT_TYPE).then((cfg) => {
+      if (active && cfg) setTypeConfig(cfg);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const loadDashboard = useCallback(async (rollNo) => {
     if (!rollNo) return;
@@ -51,6 +66,9 @@ export default function AccountDashboardPage() {
     try {
       const data = await fetchStudentDashboardData(rollNo, CURRENT_EVENT_TYPE);
       setDashboardData(data);
+      if (data?.eventTypeConfig) {
+        setTypeConfig(data.eventTypeConfig);
+      }
       if (data?.student) {
         setStudent(data.student);
       }
@@ -386,6 +404,15 @@ export default function AccountDashboardPage() {
                       ? Math.round(pay.amountInPaise / 100)
                       : 300;
 
+                  // Check if passes are enabled (passesRequired is true AND status is Active)
+                  const isPassesActive = Boolean(
+                    reg.passesEnabled !== undefined
+                      ? reg.passesEnabled
+                      : (dashboardData?.passesEnabled !== undefined
+                          ? dashboardData.passesEnabled
+                          : (typeConfig ? (typeConfig.isActive && typeConfig.passesRequired) : true))
+                  );
+
                   return (
                     <div key={reg._id || idx} className="registration-success-container" style={{ maxWidth: '100%' }}>
                       <div id={`dashboard-receipt-card-${idx}`} className="receipt-card">
@@ -471,6 +498,7 @@ export default function AccountDashboardPage() {
                                   <th scope="col" className="col-dept">Department / Year</th>
                                   <th scope="col" className="col-email">Email</th>
                                   <th scope="col" className="col-mobile">Mobile</th>
+                                  {isPassesActive && <th scope="col" className="col-pass" style={{ textAlign: 'center' }}>Pass</th>}
                                 </tr>
                               </thead>
                               <tbody>
@@ -496,18 +524,40 @@ export default function AccountDashboardPage() {
                                       </td>
                                       <td className="cell-email">{m.email || '—'}</td>
                                       <td className="cell-mobile">{m.phone || m.mobile || '—'}</td>
+                                      {isPassesActive && (
+                                        <td className="cell-pass" style={{ textAlign: 'center' }}>
+                                          <button
+                                            type="button"
+                                            className="table-view-pass-btn"
+                                            onClick={() => setSelectedPass({ member: m, registration: reg })}
+                                            title={`View Entry Pass for ${m.name || rollVal}`}
+                                            data-html2canvas-ignore="true"
+                                          >
+                                            <span>🎫 View Pass</span>
+                                          </button>
+                                        </td>
+                                      )}
                                     </tr>
                                   );
                                 })}
                               </tbody>
                             </table>
                           </div>
-                          <div className="attendance-manual-notice">
-                            <span className="attendance-notice-icon">📋</span>
-                            <div>
-                              <strong>Manual Attendance:</strong> Passes are not issued for Forensithon 2k26. Attendance will be recorded manually at the venue desk with your Roll Number &amp; College ID Card.
+                          {isPassesActive ? (
+                            <div className="attendance-pass-notice">
+                              <span className="attendance-notice-icon">🎫</span>
+                              <div>
+                                <strong>Official Passes Issued:</strong> Participant entry passes and attendance barcodes are active for {reg.challengeTitle || reg.eventTitle || 'Forensithon 2k26'}. Click <strong>"View Pass"</strong> to preview or download scannable entry cards.
+                              </div>
                             </div>
-                          </div>
+                          ) : (
+                            <div className="attendance-manual-notice">
+                              <span className="attendance-notice-icon">📋</span>
+                              <div>
+                                <strong>Manual Attendance:</strong> Passes are not issued for Forensithon 2k26. Attendance will be recorded manually at the venue desk with your Roll Number &amp; College ID Card.
+                              </div>
+                            </div>
+                          )}
                         </div>
 
                         <div className="receipt-divider" />
@@ -544,6 +594,22 @@ export default function AccountDashboardPage() {
                         >
                           {generatingPdfIdx === idx ? 'Generating PDF...' : 'Download Receipt (PDF) ↓'}
                         </button>
+                        {isPassesActive && (
+                          <button
+                            type="button"
+                            className="button secondary"
+                            onClick={() => {
+                              const leaderMember = participants.find((p) => p.isLeader) || participants[0] || {
+                                rollNumber: student?.roll,
+                                name: student?.name,
+                                isLeader: true
+                              };
+                              setSelectedPass({ member: leaderMember, registration: reg });
+                            }}
+                          >
+                            View Leader Pass 🎫
+                          </button>
+                        )}
                         <button type="button" className="button secondary" onClick={() => window.print()}>
                           Print Slip ⎙
                         </button>
@@ -594,6 +660,15 @@ export default function AccountDashboardPage() {
           </div>
         )}
       </section>
+
+      {/* Participant Entry Pass Modal */}
+      {selectedPass && (
+        <ParticipantPassModal
+          member={selectedPass.member}
+          registration={selectedPass.registration}
+          onClose={() => setSelectedPass(null)}
+        />
+      )}
     </main>
   );
 }

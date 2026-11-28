@@ -748,6 +748,39 @@ export async function fetchStudentDashboardData(rollNo, typeCode = EVENT_TYPE) {
 }
 
 /**
+ * Fetch CentralEventType configuration for operational feature access (passesRequired, isActive)
+ */
+export async function fetchEventTypeConfig(typeCode = EVENT_TYPE || 'FORENSITHON') {
+  try {
+    const cleanCode = encodeURIComponent(String(typeCode || 'FORENSITHON').trim().toUpperCase());
+    const res = await apiFetch(`/api/central-event-types/by-code/${cleanCode}`);
+    if (res.ok) {
+      const json = await res.json().catch(() => ({}));
+      if (json.success && json.data) {
+        return json.data;
+      }
+    }
+    // Fallback: query public active types
+    const fallbackRes = await apiFetch('/api/central-event-types');
+    if (fallbackRes.ok) {
+      const json = await fallbackRes.json().catch(() => ({}));
+      const list = json.data || [];
+      const match = list.find((t) => String(t.code).toUpperCase() === String(typeCode).toUpperCase());
+      if (match) {
+        return {
+          ...match,
+          passesEnabled: Boolean(match.isActive && match.passesRequired)
+        };
+      }
+    }
+    return null;
+  } catch (err) {
+    console.warn('[fetchEventTypeConfig] error:', err);
+    return null;
+  }
+}
+
+/**
  * Check if a Team Name is available or already used in Forensithon
  */
 export async function checkForensithonTeamName({ teamName, leadRoll = '', challengeId = '', excludeRegId = '' } = {}) {
